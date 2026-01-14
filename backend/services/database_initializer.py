@@ -6,15 +6,46 @@ ensuring all tables exist and optionally seeding default data.
 """
 
 import logging
+import os
 from typing import List, Tuple
-from config.pesadb import query_db, execute_db
+from config.pesadb import query_db, execute_db, create_database, database_exists
 
 logger = logging.getLogger(__name__)
 
 
 class DatabaseInitializer:
     """Service for automatic database initialization"""
-    
+
+    @staticmethod
+    async def ensure_database_exists() -> bool:
+        """
+        Ensure the target database exists, create it if it doesn't
+
+        Returns:
+            True if database exists or was created successfully
+        """
+        database_name = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
+
+        try:
+            logger.info(f"🔍 Checking if database '{database_name}' exists...")
+            exists = await database_exists(database_name)
+
+            if exists:
+                logger.info(f"✅ Database '{database_name}' already exists")
+                return True
+
+            logger.info(f"📝 Database '{database_name}' does not exist, creating it...")
+            await create_database(database_name)
+            logger.info(f"✅ Database '{database_name}' created successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Error ensuring database exists: {str(e)}")
+            # Don't fail completely - maybe the API doesn't support listing/creating databases
+            # and the database already exists
+            logger.warning("⚠️  Continuing anyway - database might already exist")
+            return True
+
     @staticmethod
     async def table_exists(table_name: str) -> bool:
         """Check if a table exists in the database"""

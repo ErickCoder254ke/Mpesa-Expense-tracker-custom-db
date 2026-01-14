@@ -133,6 +133,85 @@ class PesaDBClient:
         except Exception:
             raise
     
+    async def create_database(self, database_name: str) -> bool:
+        """
+        Create a new database
+
+        Args:
+            database_name: Name of the database to create
+
+        Returns:
+            True if successful
+
+        Raises:
+            Exception: If creation fails
+        """
+        self.config.validate()
+
+        if not self.session:
+            self.session = aiohttp.ClientSession()
+
+        url = f"{self.config.api_url}/databases"
+
+        payload = {
+            'name': database_name
+        }
+
+        try:
+            async with self.session.post(
+                url,
+                headers=self.config.get_headers(),
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                result = await response.json()
+
+                if not result.get('success'):
+                    error_msg = result.get('error', 'Database creation failed')
+                    raise Exception(f"PesaDB Error: {error_msg}")
+
+                return True
+
+        except aiohttp.ClientError as e:
+            raise Exception(f"PesaDB Connection Error: {str(e)}")
+        except Exception as e:
+            raise Exception(f"PesaDB Database Creation Error: {str(e)}")
+
+    async def database_exists(self, database_name: str) -> bool:
+        """
+        Check if a database exists
+
+        Args:
+            database_name: Name of the database to check
+
+        Returns:
+            True if database exists, False otherwise
+        """
+        self.config.validate()
+
+        if not self.session:
+            self.session = aiohttp.ClientSession()
+
+        url = f"{self.config.api_url}/databases"
+
+        try:
+            async with self.session.get(
+                url,
+                headers=self.config.get_headers(),
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                result = await response.json()
+
+                if not result.get('success'):
+                    return False
+
+                databases = result.get('databases', [])
+                return database_name in databases
+
+        except Exception:
+            # If we can't list databases, assume it doesn't exist
+            return False
+
     async def close(self):
         """Close the client session"""
         if self.session:
@@ -170,16 +249,44 @@ async def query_db(sql: str, database: Optional[str] = None) -> List[Dict[str, A
 async def execute_db(sql: str, database: Optional[str] = None) -> bool:
     """
     Convenience function to execute a command
-    
+
     Args:
         sql: SQL command string
         database: Optional database name
-    
+
     Returns:
         True if successful
     """
     client = get_client()
     return await client.execute(sql, database)
+
+
+async def create_database(database_name: str) -> bool:
+    """
+    Convenience function to create a database
+
+    Args:
+        database_name: Name of the database to create
+
+    Returns:
+        True if successful
+    """
+    client = get_client()
+    return await client.create_database(database_name)
+
+
+async def database_exists(database_name: str) -> bool:
+    """
+    Convenience function to check if database exists
+
+    Args:
+        database_name: Name of the database to check
+
+    Returns:
+        True if database exists
+    """
+    client = get_client()
+    return await client.database_exists(database_name)
 
 
 # Utility functions for SQL escaping
