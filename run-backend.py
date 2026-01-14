@@ -11,11 +11,11 @@ from pathlib import Path
 def check_dependencies():
     """Check if required dependencies are installed"""
     print("🔍 Checking dependencies...")
-    
+
     try:
         import uvicorn
         import fastapi
-        import motor
+        import aiohttp
         print("✅ Core dependencies found")
         return True
     except ImportError as e:
@@ -26,18 +26,26 @@ def check_dependencies():
 def check_environment():
     """Check environment variables and configuration"""
     print("🔍 Checking environment configuration...")
-    
+
     # Check for .env file
     env_file = Path("backend/.env")
     if env_file.exists():
         print("✅ .env file found")
     else:
         print("⚠️  No .env file found - using defaults")
-    
-    # Check MongoDB connection
-    mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-    print(f"📊 MongoDB URL: {mongo_url}")
-    
+
+    # Check PesaDB connection
+    pesadb_url = os.environ.get('PESADB_API_URL', 'https://pesacoredb-backend.onrender.com/api')
+    pesadb_key = os.environ.get('PESADB_API_KEY', 'Not Set')
+    pesadb_db = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
+
+    print(f"📊 PesaDB API URL: {pesadb_url}")
+    print(f"🔑 PesaDB API Key: {'Set ✅' if pesadb_key != 'Not Set' else 'Not Set ⚠️'}")
+    print(f"💾 PesaDB Database: {pesadb_db}")
+
+    if pesadb_key == 'Not Set':
+        print("⚠️  Warning: PESADB_API_KEY not set. Database operations will fail.")
+
     return True
 
 def start_backend():

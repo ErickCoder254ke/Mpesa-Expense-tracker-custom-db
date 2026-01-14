@@ -156,7 +156,7 @@ def run_comprehensive_tests():
         
         colored_print("\n🔧 IMMEDIATE ACTIONS NEEDED:", "yellow")
         colored_print("   1. Ensure backend server is running (python run-backend.py)", "yellow")
-        colored_print("   2. Check MongoDB connection", "yellow")
+        colored_print("   2. Check PesaDB connection and API key", "yellow")
         colored_print("   3. Verify all dependencies are installed", "yellow")
         colored_print("   4. Check backend logs for errors", "yellow")
     
