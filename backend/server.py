@@ -23,6 +23,23 @@ db = client[db_name]
 # Create the main app without a prefix
 app = FastAPI()
 
+# Add CORS middleware FIRST (before routes)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8081",
+        "http://localhost:19006",
+        "http://localhost:19000",
+        "exp://localhost:8081",
+        "exp://localhost:19000",
+        "exp://localhost:19006",
+        "*"  # Allow all origins for development
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
@@ -82,14 +99,6 @@ api_router.include_router(budgets.router)
 
 # Include the router in the main app
 app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Configure logging
 logging.basicConfig(
