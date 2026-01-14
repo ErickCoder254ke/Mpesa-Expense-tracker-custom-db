@@ -45,11 +45,11 @@ class DatabaseInitializer:
                 """
                 CREATE TABLE users (
                     id STRING PRIMARY KEY,
-                    pin_hash STRING NOT NULL,
+                    pin_hash STRING,
                     security_question STRING,
                     security_answer_hash STRING,
-                    created_at STRING NOT NULL,
-                    preferences STRING DEFAULT '{}'
+                    created_at STRING,
+                    preferences STRING
                 )
                 """
             ),
@@ -60,11 +60,11 @@ class DatabaseInitializer:
                 CREATE TABLE categories (
                     id STRING PRIMARY KEY,
                     user_id STRING,
-                    name STRING NOT NULL,
-                    icon STRING NOT NULL,
-                    color STRING NOT NULL,
-                    keywords STRING DEFAULT '[]',
-                    is_default BOOL DEFAULT TRUE
+                    name STRING,
+                    icon STRING,
+                    color STRING,
+                    keywords STRING,
+                    is_default BOOL
                 )
                 """
             ),
@@ -74,18 +74,18 @@ class DatabaseInitializer:
                 """
                 CREATE TABLE transactions (
                     id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
-                    amount REAL NOT NULL,
-                    type STRING NOT NULL CHECK (type IN ('expense', 'income')),
-                    category_id STRING NOT NULL,
-                    description STRING NOT NULL,
-                    date STRING NOT NULL,
-                    source STRING DEFAULT 'manual' CHECK (source IN ('manual', 'sms', 'api')),
+                    user_id STRING,
+                    amount REAL,
+                    type STRING,
+                    category_id STRING,
+                    description STRING,
+                    date STRING,
+                    source STRING,
                     mpesa_details STRING,
                     sms_metadata STRING,
-                    created_at STRING NOT NULL,
+                    created_at STRING,
                     transaction_group_id STRING,
-                    transaction_role STRING DEFAULT 'primary',
+                    transaction_role STRING,
                     parent_transaction_id STRING
                 )
                 """
@@ -96,13 +96,13 @@ class DatabaseInitializer:
                 """
                 CREATE TABLE budgets (
                     id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
-                    category_id STRING NOT NULL,
-                    amount REAL NOT NULL,
-                    period STRING DEFAULT 'monthly' CHECK (period IN ('monthly', 'weekly', 'yearly')),
-                    month INT NOT NULL,
-                    year INT NOT NULL,
-                    created_at STRING NOT NULL
+                    user_id STRING,
+                    category_id STRING,
+                    amount REAL,
+                    period STRING,
+                    month INT,
+                    year INT,
+                    created_at STRING
                 )
                 """
             ),
@@ -112,15 +112,15 @@ class DatabaseInitializer:
                 """
                 CREATE TABLE sms_import_logs (
                     id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
-                    import_session_id STRING NOT NULL,
-                    total_messages INT DEFAULT 0,
-                    successful_imports INT DEFAULT 0,
-                    duplicates_found INT DEFAULT 0,
-                    parsing_errors INT DEFAULT 0,
-                    transactions_created STRING DEFAULT '[]',
-                    errors STRING DEFAULT '[]',
-                    created_at STRING NOT NULL
+                    user_id STRING,
+                    import_session_id STRING,
+                    total_messages INT,
+                    successful_imports INT,
+                    duplicates_found INT,
+                    parsing_errors INT,
+                    transactions_created STRING,
+                    errors STRING,
+                    created_at STRING
                 )
                 """
             ),
@@ -130,14 +130,14 @@ class DatabaseInitializer:
                 """
                 CREATE TABLE duplicate_logs (
                     id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
+                    user_id STRING,
                     original_transaction_id STRING,
                     duplicate_transaction_id STRING,
                     message_hash STRING,
                     mpesa_transaction_id STRING,
                     reason STRING,
                     similarity_score REAL,
-                    detected_at STRING NOT NULL
+                    detected_at STRING
                 )
                 """
             ),
@@ -147,8 +147,8 @@ class DatabaseInitializer:
                 """
                 CREATE TABLE status_checks (
                     id STRING PRIMARY KEY,
-                    status STRING NOT NULL,
-                    timestamp STRING NOT NULL,
+                    status STRING,
+                    timestamp STRING,
                     details STRING
                 )
                 """
@@ -210,9 +210,12 @@ class DatabaseInitializer:
             seeded_count = 0
             for cat_id, name, icon, color, keywords in default_categories:
                 try:
+                    # Note: PesaDB uses TRUE/FALSE for booleans and NULL for null values (without quotes)
+                    # Escape single quotes in name for SQL safety
+                    safe_name = name.replace("'", "''")
                     sql = f"""
                     INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-                    VALUES ('{cat_id}', NULL, '{name}', '{icon}', '{color}', '{keywords}', TRUE)
+                    VALUES ('{cat_id}', NULL, '{safe_name}', '{icon}', '{color}', '{keywords}', TRUE)
                     """
                     await execute_db(sql)
                     seeded_count += 1
