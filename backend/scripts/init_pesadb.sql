@@ -1,18 +1,10 @@
--- PesaDB Database Initialization Script
--- This script creates all tables required for the M-Pesa Expense Tracker application
--- Updated with IF NOT EXISTS for idempotent initialization
+-- M-Pesa Expense Tracker Database Schema for PesaDB
+-- This script creates all required tables and relationships
 
--- Drop existing tables if they exist (for clean re-initialization)
--- Note: These are skipped during automatic initialization
-DROP TABLE IF EXISTS duplicate_logs;
-DROP TABLE IF EXISTS sms_import_logs;
-DROP TABLE IF EXISTS budgets;
-DROP TABLE IF EXISTS transactions;
-DROP TABLE IF EXISTS categories;
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS status_checks;
-
--- Users Table
+-- ==============================================
+-- USERS TABLE
+-- ==============================================
+-- Stores user authentication and preferences
 CREATE TABLE IF NOT EXISTS users (
     id STRING PRIMARY KEY,
     pin_hash STRING NOT NULL,
@@ -22,7 +14,10 @@ CREATE TABLE IF NOT EXISTS users (
     preferences STRING DEFAULT '{}'
 );
 
--- Categories Table
+-- ==============================================
+-- CATEGORIES TABLE
+-- ==============================================
+-- Stores transaction categories with icons and keywords for auto-categorization
 CREATE TABLE IF NOT EXISTS categories (
     id STRING PRIMARY KEY,
     user_id STRING,
@@ -33,16 +28,19 @@ CREATE TABLE IF NOT EXISTS categories (
     is_default BOOL DEFAULT TRUE
 );
 
--- Transactions Table
+-- ==============================================
+-- TRANSACTIONS TABLE
+-- ==============================================
+-- Stores all financial transactions (expenses and income)
 CREATE TABLE IF NOT EXISTS transactions (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
     amount REAL NOT NULL,
-    type STRING NOT NULL CHECK (type IN ('expense', 'income')),
+    type STRING NOT NULL,
     category_id STRING NOT NULL,
     description STRING NOT NULL,
     date STRING NOT NULL,
-    source STRING DEFAULT 'manual' CHECK (source IN ('manual', 'sms', 'api')),
+    source STRING DEFAULT 'manual',
     mpesa_details STRING,
     sms_metadata STRING,
     created_at STRING NOT NULL,
@@ -51,19 +49,25 @@ CREATE TABLE IF NOT EXISTS transactions (
     parent_transaction_id STRING
 );
 
--- Budgets Table
+-- ==============================================
+-- BUDGETS TABLE
+-- ==============================================
+-- Stores budget limits for categories per month/year
 CREATE TABLE IF NOT EXISTS budgets (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
     category_id STRING NOT NULL,
     amount REAL NOT NULL,
-    period STRING DEFAULT 'monthly' CHECK (period IN ('monthly', 'weekly', 'yearly')),
+    period STRING DEFAULT 'monthly',
     month INT NOT NULL,
     year INT NOT NULL,
     created_at STRING NOT NULL
 );
 
--- SMS Import Logs Table
+-- ==============================================
+-- SMS IMPORT LOGS TABLE
+-- ==============================================
+-- Tracks SMS import sessions and their results
 CREATE TABLE IF NOT EXISTS sms_import_logs (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
@@ -77,7 +81,10 @@ CREATE TABLE IF NOT EXISTS sms_import_logs (
     created_at STRING NOT NULL
 );
 
--- Duplicate Logs Table
+-- ==============================================
+-- DUPLICATE LOGS TABLE
+-- ==============================================
+-- Tracks detected duplicate transactions for debugging and audit
 CREATE TABLE IF NOT EXISTS duplicate_logs (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
@@ -90,7 +97,10 @@ CREATE TABLE IF NOT EXISTS duplicate_logs (
     detected_at STRING NOT NULL
 );
 
--- Status Checks Table (for health monitoring)
+-- ==============================================
+-- STATUS CHECKS TABLE
+-- ==============================================
+-- Health check and status monitoring
 CREATE TABLE IF NOT EXISTS status_checks (
     id STRING PRIMARY KEY,
     status STRING NOT NULL,
@@ -98,54 +108,9 @@ CREATE TABLE IF NOT EXISTS status_checks (
     details STRING
 );
 
--- Create indexes for better query performance
--- Note: Index syntax may vary based on PesaDB implementation
--- Adjust as needed based on PesaDB's actual index support
-
--- User lookups are rare (single user app), but index for safety
--- CREATE INDEX IF NOT EXISTS idx_users_id ON users(id);
-
--- Category lookups by user
--- CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
--- CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name);
-
--- Transaction indexes (most critical for performance)
--- CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
--- CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
--- CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
--- CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
--- CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
--- CREATE INDEX IF NOT EXISTS idx_transactions_message_hash ON transactions((sms_metadata->>'original_message_hash'));
-
--- Budget indexes
--- CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON budgets(user_id);
--- CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
--- CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year);
-
--- SMS import logs
--- CREATE INDEX IF NOT EXISTS idx_sms_import_logs_user_id ON sms_import_logs(user_id);
--- CREATE INDEX IF NOT EXISTS idx_sms_import_logs_session_id ON sms_import_logs(import_session_id);
-
--- Duplicate logs
--- CREATE INDEX IF NOT EXISTS idx_duplicate_logs_user_id ON duplicate_logs(user_id);
--- CREATE INDEX IF NOT EXISTS idx_duplicate_logs_message_hash ON duplicate_logs(message_hash);
--- CREATE INDEX IF NOT EXISTS idx_duplicate_logs_mpesa_transaction_id ON duplicate_logs(mpesa_transaction_id);
-
--- Insert default categories (same as in the original MongoDB setup)
--- These will be created during setup-pin flow, but we can pre-seed them here
-
--- Default categories for a demo/initial user
--- Uncomment if you want to pre-populate categories:
-
--- INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default) VALUES
--- ('cat-food', NULL, 'Food & Dining', '🍔', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast"]', TRUE),
--- ('cat-transport', NULL, 'Transport', '🚗', '#4ECDC4', '["taxi", "bus", "matatu", "uber", "fuel", "transport"]', TRUE),
--- ('cat-shopping', NULL, 'Shopping', '🛍️', '#95E1D3', '["shop", "store", "mall", "clothing", "electronics"]', TRUE),
--- ('cat-bills', NULL, 'Bills & Utilities', '📱', '#F38181', '["bill", "electricity", "water", "internet", "phone", "utility"]', TRUE),
--- ('cat-entertainment', NULL, 'Entertainment', '🎬', '#AA96DA', '["movie", "cinema", "game", "entertainment", "music"]', TRUE),
--- ('cat-health', NULL, 'Health & Fitness', '⚕️', '#FCBAD3', '["hospital", "pharmacy", "doctor", "medicine", "gym", "health"]', TRUE),
--- ('cat-education', NULL, 'Education', '📚', '#A8D8EA', '["school", "books", "tuition", "education", "course"]', TRUE),
--- ('cat-airtime', NULL, 'Airtime & Data', '📞', '#FFFFD2', '["airtime", "data", "bundles", "safaricom", "airtel"]', TRUE),
--- ('cat-transfers', NULL, 'Money Transfer', '💸', '#FEC8D8', '["transfer", "send money", "mpesa", "paybill", "till"]', TRUE),
--- ('cat-savings', NULL, 'Savings & Investments', '💰', '#957DAD', '["savings", "investment", "deposit", "savings account"]', TRUE),
--- ('cat-other', NULL, 'Other', '📌', '#D4A5A5', '[]', TRUE);
+-- ==============================================
+-- DEFAULT CATEGORIES SEED DATA
+-- ==============================================
+-- Insert default categories (will be skipped if already exist)
+-- Note: These INSERT statements will be handled by the seeding function
+-- to avoid duplicate key errors

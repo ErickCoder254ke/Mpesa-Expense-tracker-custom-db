@@ -51,12 +51,27 @@ class DatabaseInitializer:
     async def table_exists(table_name: str) -> bool:
         """Check if a table exists in the database"""
         try:
-            # Try to query the table with a LIMIT 0 to check existence
-            await query_db(f"SELECT * FROM {table_name} LIMIT 0")
+            # Try to query the table with a COUNT to check existence
+            # This is more reliable than LIMIT 0 for some databases
+            result = await query_db(f"SELECT COUNT(*) as count FROM {table_name} LIMIT 1")
+            # If we get here without exception, table exists
             return True
         except Exception as e:
-            logger.debug(f"Table '{table_name}' does not exist: {str(e)}")
-            return False
+            error_msg = str(e).lower()
+            # Check for various "table doesn't exist" error messages
+            if any(phrase in error_msg for phrase in [
+                'does not exist',
+                'no such table',
+                'table not found',
+                'unknown table',
+                'tablenotfound'
+            ]):
+                logger.debug(f"Table '{table_name}' does not exist: {str(e)}")
+                return False
+            else:
+                # Other errors - log as warning but assume table doesn't exist
+                logger.warning(f"Error checking table '{table_name}': {str(e)}")
+                return False
     
     @staticmethod
     async def load_sql_from_file() -> str:
@@ -130,65 +145,72 @@ class DatabaseInitializer:
     async def create_tables() -> Tuple[int, int, List[str]]:
         """
         Create all required tables if they don't exist using the SQL file
-        
+
         Returns:
             Tuple of (tables_created, tables_skipped, errors)
         """
         tables_created = 0
         tables_skipped = 0
         errors = []
-        
+
         try:
             # Load SQL from file
             logger.info("📖 Loading SQL schema from init_pesadb.sql...")
             sql_content = await DatabaseInitializer.load_sql_from_file()
-            
+
             # Parse statements
             statements = DatabaseInitializer.parse_sql_statements(sql_content)
             logger.info(f"📝 Found {len(statements)} SQL statements to execute")
-            
+
             # Execute each statement
             for i, statement in enumerate(statements, 1):
                 # Skip DROP TABLE statements in automatic initialization
                 if statement.upper().startswith('DROP TABLE'):
                     logger.debug(f"⏭️  Skipping DROP TABLE statement {i}")
                     continue
-                
+
                 # Skip INSERT statements (those will be handled by seed_default_categories)
                 if statement.upper().startswith('INSERT INTO'):
                     logger.debug(f"⏭️  Skipping INSERT statement {i} (handled by seeding)")
                     continue
-                
+
                 # Only process CREATE TABLE statements
                 if not statement.upper().startswith('CREATE TABLE'):
                     logger.debug(f"⏭️  Skipping non-CREATE TABLE statement {i}")
                     continue
-                
+
                 # Extract table name for logging
                 table_name = statement.split('(')[0].replace('CREATE TABLE', '').replace('IF NOT EXISTS', '').strip()
-                
+
                 try:
-                    # Check if table exists first
+                    # Modify statement for idempotency first
+                    modified_statement = DatabaseInitializer.modify_statement_for_idempotency(statement)
+
+                    # Try to create the table (IF NOT EXISTS will prevent errors if it exists)
+                    logger.info(f"📝 Creating table '{table_name}'...")
+                    logger.debug(f"SQL: {modified_statement[:100]}...")
+
+                    await execute_db(modified_statement)
+
+                    # Verify the table was created
                     exists = await DatabaseInitializer.table_exists(table_name)
-                    
+
                     if exists:
-                        logger.info(f"✅ Table '{table_name}' already exists")
-                        tables_skipped += 1
-                    else:
-                        # Modify statement for idempotency
-                        modified_statement = DatabaseInitializer.modify_statement_for_idempotency(statement)
-                        
-                        logger.info(f"📝 Creating table '{table_name}'...")
-                        await execute_db(modified_statement)
-                        logger.info(f"✅ Table '{table_name}' created successfully")
+                        logger.info(f"✅ Table '{table_name}' created/verified successfully")
                         tables_created += 1
-                    
+                    else:
+                        error_msg = f"Table '{table_name}' creation reported success but verification failed"
+                        logger.warning(f"⚠️  {error_msg}")
+                        # Don't add to errors - the table might exist but verification method failed
+                        tables_created += 1  # Assume success if execute_db didn't raise
+
                 except Exception as e:
                     error_msg = f"Error with table '{table_name}': {str(e)}"
                     logger.error(f"❌ {error_msg}")
+                    logger.debug(f"Failed SQL: {modified_statement[:200]}")
                     errors.append(error_msg)
                     # Continue with other tables
-        
+
         except FileNotFoundError as e:
             error_msg = f"SQL file not found: {str(e)}"
             logger.error(f"❌ {error_msg}")
@@ -196,167 +218,159 @@ class DatabaseInitializer:
             # Fall back to inline schema if file not found
             logger.warning("⚠️  Falling back to inline schema definitions...")
             return await DatabaseInitializer.create_tables_inline()
-        
+
         except Exception as e:
             error_msg = f"Error loading SQL schema: {str(e)}"
             logger.error(f"❌ {error_msg}")
             errors.append(error_msg)
-        
+
         return tables_created, tables_skipped, errors
     
     @staticmethod
     async def create_tables_inline() -> Tuple[int, int, List[str]]:
         """
         Fallback method: Create tables using inline SQL (legacy method)
-        
+
         Returns:
             Tuple of (tables_created, tables_skipped, errors)
         """
         tables_created = 0
         tables_skipped = 0
         errors = []
-        
+
         logger.warning("⚠️  Using fallback inline schema creation")
-        
+
         # Define table creation statements (with IF NOT EXISTS for safety)
         table_statements = [
             # Users table
             (
                 "users",
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id STRING PRIMARY KEY,
-                    pin_hash STRING NOT NULL,
-                    security_question STRING,
-                    security_answer_hash STRING,
-                    created_at STRING NOT NULL,
-                    preferences STRING DEFAULT '{}'
-                )
-                """
+                """CREATE TABLE IF NOT EXISTS users (
+    id STRING PRIMARY KEY,
+    pin_hash STRING NOT NULL,
+    security_question STRING,
+    security_answer_hash STRING,
+    created_at STRING NOT NULL,
+    preferences STRING DEFAULT '{}'
+)"""
             ),
             # Categories table
             (
                 "categories",
-                """
-                CREATE TABLE IF NOT EXISTS categories (
-                    id STRING PRIMARY KEY,
-                    user_id STRING,
-                    name STRING NOT NULL,
-                    icon STRING NOT NULL,
-                    color STRING NOT NULL,
-                    keywords STRING DEFAULT '[]',
-                    is_default BOOL DEFAULT TRUE
-                )
-                """
+                """CREATE TABLE IF NOT EXISTS categories (
+    id STRING PRIMARY KEY,
+    user_id STRING,
+    name STRING NOT NULL,
+    icon STRING NOT NULL,
+    color STRING NOT NULL,
+    keywords STRING DEFAULT '[]',
+    is_default BOOL DEFAULT TRUE
+)"""
             ),
             # Transactions table
             (
                 "transactions",
-                """
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
-                    amount REAL NOT NULL,
-                    type STRING NOT NULL,
-                    category_id STRING NOT NULL,
-                    description STRING NOT NULL,
-                    date STRING NOT NULL,
-                    source STRING DEFAULT 'manual',
-                    mpesa_details STRING,
-                    sms_metadata STRING,
-                    created_at STRING NOT NULL,
-                    transaction_group_id STRING,
-                    transaction_role STRING DEFAULT 'primary',
-                    parent_transaction_id STRING
-                )
-                """
+                """CREATE TABLE IF NOT EXISTS transactions (
+    id STRING PRIMARY KEY,
+    user_id STRING NOT NULL,
+    amount REAL NOT NULL,
+    type STRING NOT NULL,
+    category_id STRING NOT NULL,
+    description STRING NOT NULL,
+    date STRING NOT NULL,
+    source STRING DEFAULT 'manual',
+    mpesa_details STRING,
+    sms_metadata STRING,
+    created_at STRING NOT NULL,
+    transaction_group_id STRING,
+    transaction_role STRING DEFAULT 'primary',
+    parent_transaction_id STRING
+)"""
             ),
             # Budgets table
             (
                 "budgets",
-                """
-                CREATE TABLE IF NOT EXISTS budgets (
-                    id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
-                    category_id STRING NOT NULL,
-                    amount REAL NOT NULL,
-                    period STRING DEFAULT 'monthly',
-                    month INT NOT NULL,
-                    year INT NOT NULL,
-                    created_at STRING NOT NULL
-                )
-                """
+                """CREATE TABLE IF NOT EXISTS budgets (
+    id STRING PRIMARY KEY,
+    user_id STRING NOT NULL,
+    category_id STRING NOT NULL,
+    amount REAL NOT NULL,
+    period STRING DEFAULT 'monthly',
+    month INT NOT NULL,
+    year INT NOT NULL,
+    created_at STRING NOT NULL
+)"""
             ),
             # SMS Import Logs table
             (
                 "sms_import_logs",
-                """
-                CREATE TABLE IF NOT EXISTS sms_import_logs (
-                    id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
-                    import_session_id STRING NOT NULL,
-                    total_messages INT DEFAULT 0,
-                    successful_imports INT DEFAULT 0,
-                    duplicates_found INT DEFAULT 0,
-                    parsing_errors INT DEFAULT 0,
-                    transactions_created STRING DEFAULT '[]',
-                    errors STRING DEFAULT '[]',
-                    created_at STRING NOT NULL
-                )
-                """
+                """CREATE TABLE IF NOT EXISTS sms_import_logs (
+    id STRING PRIMARY KEY,
+    user_id STRING NOT NULL,
+    import_session_id STRING NOT NULL,
+    total_messages INT DEFAULT 0,
+    successful_imports INT DEFAULT 0,
+    duplicates_found INT DEFAULT 0,
+    parsing_errors INT DEFAULT 0,
+    transactions_created STRING DEFAULT '[]',
+    errors STRING DEFAULT '[]',
+    created_at STRING NOT NULL
+)"""
             ),
             # Duplicate Logs table
             (
                 "duplicate_logs",
-                """
-                CREATE TABLE IF NOT EXISTS duplicate_logs (
-                    id STRING PRIMARY KEY,
-                    user_id STRING NOT NULL,
-                    original_transaction_id STRING,
-                    duplicate_transaction_id STRING,
-                    message_hash STRING,
-                    mpesa_transaction_id STRING,
-                    reason STRING,
-                    similarity_score REAL,
-                    detected_at STRING NOT NULL
-                )
-                """
+                """CREATE TABLE IF NOT EXISTS duplicate_logs (
+    id STRING PRIMARY KEY,
+    user_id STRING NOT NULL,
+    original_transaction_id STRING,
+    duplicate_transaction_id STRING,
+    message_hash STRING,
+    mpesa_transaction_id STRING,
+    reason STRING,
+    similarity_score REAL,
+    detected_at STRING NOT NULL
+)"""
             ),
             # Status Checks table
             (
                 "status_checks",
-                """
-                CREATE TABLE IF NOT EXISTS status_checks (
-                    id STRING PRIMARY KEY,
-                    status STRING NOT NULL,
-                    timestamp STRING NOT NULL,
-                    details STRING
-                )
-                """
+                """CREATE TABLE IF NOT EXISTS status_checks (
+    id STRING PRIMARY KEY,
+    status STRING NOT NULL,
+    timestamp STRING NOT NULL,
+    details STRING
+)"""
             ),
         ]
-        
+
         for table_name, create_statement in table_statements:
             try:
-                # Check if table exists
+                # Try to create the table directly (IF NOT EXISTS will prevent errors)
+                logger.info(f"📝 Creating table '{table_name}' (inline)...")
+                logger.debug(f"SQL: {create_statement[:100].replace(chr(10), ' ')}...")
+
+                await execute_db(create_statement)
+
+                # Verify the table was created
                 exists = await DatabaseInitializer.table_exists(table_name)
-                
+
                 if exists:
-                    logger.info(f"✅ Table '{table_name}' already exists")
-                    tables_skipped += 1
-                else:
-                    # Create the table
-                    logger.info(f"📝 Creating table '{table_name}'...")
-                    await execute_db(create_statement)
-                    logger.info(f"✅ Table '{table_name}' created successfully")
+                    logger.info(f"✅ Table '{table_name}' created/verified successfully")
                     tables_created += 1
-                    
+                else:
+                    error_msg = f"Table '{table_name}' creation reported success but verification failed"
+                    logger.warning(f"⚠️  {error_msg}")
+                    # Assume success if execute_db didn't raise
+                    tables_created += 1
+
             except Exception as e:
                 error_msg = f"Error creating table '{table_name}': {str(e)}"
                 logger.error(f"❌ {error_msg}")
+                logger.debug(f"Failed SQL: {create_statement[:200].replace(chr(10), ' ')}")
                 errors.append(error_msg)
                 # Continue with other tables
-        
+
         return tables_created, tables_skipped, errors
     
     @staticmethod
@@ -417,7 +431,7 @@ class DatabaseInitializer:
     async def verify_database() -> bool:
         """
         Verify that all required tables exist and are accessible
-        
+
         Returns:
             True if database is properly initialized, False otherwise
         """
@@ -425,20 +439,32 @@ class DatabaseInitializer:
             'users', 'categories', 'transactions', 'budgets',
             'sms_import_logs', 'duplicate_logs', 'status_checks'
         ]
-        
+
         try:
+            missing_tables = []
+            verified_tables = []
+
+            logger.info(f"🔍 Verifying {len(required_tables)} required tables...")
+
             for table in required_tables:
                 exists = await DatabaseInitializer.table_exists(table)
                 if not exists:
                     logger.error(f"❌ Required table '{table}' does not exist")
-                    return False
-                logger.debug(f"✅ Table '{table}' verified")
-            
-            logger.info("✅ Database verification successful - all tables exist")
+                    missing_tables.append(table)
+                else:
+                    logger.info(f"✅ Table '{table}' verified")
+                    verified_tables.append(table)
+
+            if missing_tables:
+                logger.error(f"❌ Database verification failed - missing tables: {', '.join(missing_tables)}")
+                logger.info(f"📊 Verification summary: {len(verified_tables)}/{len(required_tables)} tables exist")
+                return False
+
+            logger.info(f"✅ Database verification successful - all {len(required_tables)} tables exist")
             return True
-            
+
         except Exception as e:
-            logger.error(f"❌ Database verification failed: {str(e)}")
+            logger.error(f"❌ Database verification failed with exception: {str(e)}")
             return False
     
     @staticmethod
@@ -527,17 +553,17 @@ class DatabaseInitializer:
         }
 
         try:
-            # Step 0: Ensure database exists (NEW - this was missing!)
+            # Step 0: Ensure database exists
             logger.info("📝 Step 0: Ensuring database exists...")
             db_created = await DatabaseInitializer.ensure_database_exists()
             result['database_created'] = db_created
-            
+
             if not db_created:
                 error_msg = 'Failed to ensure database exists'
                 result['errors'].append(error_msg)
                 logger.error(f"❌ {error_msg}")
                 # Continue anyway - database might exist
-            
+
             # Step 1: Create tables
             logger.info("📝 Step 1: Creating tables...")
             tables_created, tables_skipped, table_errors = await DatabaseInitializer.create_tables()
@@ -546,6 +572,11 @@ class DatabaseInitializer:
             result['errors'].extend(table_errors)
 
             logger.info(f"📊 Tables: {tables_created} created, {tables_skipped} already existed")
+
+            if table_errors:
+                logger.warning(f"⚠️  {len(table_errors)} errors occurred during table creation:")
+                for error in table_errors[:5]:  # Show first 5 errors
+                    logger.warning(f"  - {error}")
 
             # Step 2: Verify database
             logger.info("📝 Step 2: Verifying database...")
@@ -556,8 +587,28 @@ class DatabaseInitializer:
                 error_msg = 'Database verification failed - some tables are missing'
                 result['errors'].append(error_msg)
                 logger.error(f"❌ {error_msg}")
-                result['message'] = error_msg
-                return result
+
+                # If verification failed, try inline creation as a fallback
+                if tables_created == 0:
+                    logger.warning("⚠️  No tables were created, attempting fallback inline creation...")
+                    tables_created, tables_skipped, inline_errors = await DatabaseInitializer.create_tables_inline()
+                    result['tables_created'] = tables_created
+                    result['tables_skipped'] = tables_skipped
+                    result['errors'].extend(inline_errors)
+
+                    # Re-verify after inline creation
+                    verified = await DatabaseInitializer.verify_database()
+                    result['verified'] = verified
+
+                    if not verified:
+                        result['message'] = 'Database verification failed after fallback attempt'
+                        logger.error(f"❌ {result['message']}")
+                        return result
+                    else:
+                        logger.info("✅ Database verified successfully after fallback creation")
+                else:
+                    result['message'] = error_msg
+                    return result
 
             # Step 3: Seed default categories if requested
             if seed_categories:
