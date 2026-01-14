@@ -214,7 +214,7 @@ class DuplicateDetector:
         # Count SMS transactions processed
         from config.pesadb import query_db
         sms_result = await query_db(f"""
-        SELECT COUNT(*) as count FROM transactions
+        SELECT COUNT(1) as count FROM transactions
         WHERE user_id = '{user_id}'
         AND source = 'sms'
         AND created_at >= '{cutoff_str}'
@@ -223,7 +223,7 @@ class DuplicateDetector:
         
         # Get common duplicate reasons
         reasons_result = await query_db(f"""
-        SELECT duplicate_reasons, COUNT(*) as count
+        SELECT duplicate_reasons, COUNT(1) as count
         FROM duplicate_logs
         WHERE user_id = '{user_id}'
         AND detected_at >= '{cutoff_str}'

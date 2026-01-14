@@ -71,7 +71,7 @@ class DatabaseTest:
     async def test_categories_seeded(self) -> bool:
         """Test if default categories were seeded"""
         try:
-            result = await query_db("SELECT COUNT(*) as count FROM categories WHERE is_default = TRUE")
+            result = await query_db("SELECT COUNT(1) as count FROM categories WHERE is_default = TRUE")
             count = result[0]['count'] if result else 0
             
             if count >= 12:

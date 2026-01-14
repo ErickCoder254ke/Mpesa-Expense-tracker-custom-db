@@ -172,9 +172,9 @@ class BudgetMonitoringService:
         
         # Overall spending aggregation using SQL
         total_query = f"""
-        SELECT 
+        SELECT
             SUM(amount) as total_spent,
-            COUNT(*) as transaction_count,
+            COUNT(1) as transaction_count,
             AVG(amount) as avg_transaction,
             MAX(amount) as max_transaction,
             MIN(amount) as min_transaction
@@ -202,10 +202,10 @@ class BudgetMonitoringService:
         # Daily spending pattern using SQL GROUP BY
         # Extract day from date (SQL syntax may vary by database)
         daily_query = f"""
-        SELECT 
+        SELECT
             date,
             SUM(amount) as daily_amount,
-            COUNT(*) as daily_count
+            COUNT(1) as daily_count
         FROM transactions
         WHERE user_id = '{user_id}'
         AND category_id = '{category_id}'
