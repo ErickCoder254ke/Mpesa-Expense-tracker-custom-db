@@ -128,21 +128,35 @@ class DatabaseInitializer:
         return statements
     
     @staticmethod
-    def modify_statement_for_idempotency(statement: str) -> str:
+    def is_create_table_statement(statement: str) -> bool:
         """
-        Modify CREATE TABLE statements to use IF NOT EXISTS
-        
+        Check if a statement is a CREATE TABLE statement
+
         Args:
             statement: SQL statement
-            
+
         Returns:
-            Modified statement with IF NOT EXISTS
+            True if it's a CREATE TABLE statement
         """
-        # Check if it's a CREATE TABLE statement without IF NOT EXISTS
-        if statement.upper().startswith('CREATE TABLE') and 'IF NOT EXISTS' not in statement.upper():
-            # Insert IF NOT EXISTS after CREATE TABLE
-            return statement.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', 1)
-        return statement
+        return statement.upper().strip().startswith('CREATE TABLE')
+
+    @staticmethod
+    def extract_table_name_from_create(statement: str) -> str:
+        """
+        Extract table name from a CREATE TABLE statement
+
+        Args:
+            statement: CREATE TABLE SQL statement
+
+        Returns:
+            Table name
+        """
+        # Parse "CREATE TABLE table_name (" to extract table_name
+        parts = statement.split('(')
+        if len(parts) > 0:
+            table_part = parts[0].replace('CREATE TABLE', '').replace('IF NOT EXISTS', '').strip()
+            return table_part
+        return 'unknown'
     
     @staticmethod
     async def create_tables() -> Tuple[int, int, List[str]]:
@@ -172,46 +186,58 @@ class DatabaseInitializer:
                     logger.debug(f"⏭️  Skipping DROP TABLE statement {i}")
                     continue
 
-                # Skip INSERT statements (those will be handled by seed_default_categories)
-                if statement.upper().startswith('INSERT INTO'):
-                    logger.debug(f"⏭️  Skipping INSERT statement {i} (handled by seeding)")
-                    continue
-
-                # Only process CREATE TABLE statements
+                # Only process CREATE TABLE statements here
+                # INSERT statements will be handled after table creation
                 if not statement.upper().startswith('CREATE TABLE'):
                     logger.debug(f"⏭️  Skipping non-CREATE TABLE statement {i}")
                     continue
 
                 # Extract table name for logging
-                table_name = statement.split('(')[0].replace('CREATE TABLE', '').replace('IF NOT EXISTS', '').strip()
+                table_name = DatabaseInitializer.extract_table_name_from_create(statement)
 
                 try:
-                    # Modify statement for idempotency first
-                    modified_statement = DatabaseInitializer.modify_statement_for_idempotency(statement)
+                    # Check if table already exists
+                    exists = await DatabaseInitializer.table_exists(table_name)
 
-                    # Try to create the table (IF NOT EXISTS will prevent errors if it exists)
+                    if exists:
+                        logger.info(f"✅ Table '{table_name}' already exists, skipping creation")
+                        tables_skipped += 1
+                        continue
+
+                    # Try to create the table
                     logger.info(f"📝 Creating table '{table_name}'...")
-                    logger.debug(f"SQL: {modified_statement[:100]}...")
+                    logger.debug(f"SQL: {statement[:100]}...")
 
-                    await execute_db(modified_statement)
+                    await execute_db(statement)
 
                     # Verify the table was created
                     exists = await DatabaseInitializer.table_exists(table_name)
 
                     if exists:
-                        logger.info(f"✅ Table '{table_name}' created/verified successfully")
+                        logger.info(f"✅ Table '{table_name}' created successfully")
                         tables_created += 1
                     else:
                         error_msg = f"Table '{table_name}' creation reported success but verification failed"
                         logger.warning(f"⚠️  {error_msg}")
-                        # Don't add to errors - the table might exist but verification method failed
-                        tables_created += 1  # Assume success if execute_db didn't raise
+                        # Assume success if execute_db didn't raise
+                        tables_created += 1
 
                 except Exception as e:
-                    error_msg = f"Error with table '{table_name}': {str(e)}"
-                    logger.error(f"❌ {error_msg}")
-                    logger.debug(f"Failed SQL: {modified_statement[:200]}")
-                    errors.append(error_msg)
+                    error_str = str(e).lower()
+                    # Check if error is because table already exists
+                    if any(phrase in error_str for phrase in [
+                        'already exists',
+                        'table exists',
+                        'duplicate',
+                        'exist'
+                    ]):
+                        logger.info(f"✅ Table '{table_name}' already exists (detected from error)")
+                        tables_skipped += 1
+                    else:
+                        error_msg = f"Error creating table '{table_name}': {str(e)}"
+                        logger.error(f"❌ {error_msg}")
+                        logger.debug(f"Failed SQL: {statement[:200]}")
+                        errors.append(error_msg)
                     # Continue with other tables
 
         except FileNotFoundError as e:
@@ -226,6 +252,45 @@ class DatabaseInitializer:
             error_msg = f"Error loading SQL schema: {str(e)}"
             logger.error(f"❌ {error_msg}")
             errors.append(error_msg)
+
+        # After tables are created, execute INSERT statements
+        logger.info("📦 Now executing INSERT statements for seed data...")
+        try:
+            sql_content = await DatabaseInitializer.load_sql_from_file()
+            statements = DatabaseInitializer.parse_sql_statements(sql_content)
+
+            insert_count = 0
+            insert_errors = 0
+
+            for i, statement in enumerate(statements, 1):
+                if statement.upper().startswith('INSERT INTO'):
+                    try:
+                        # Extract rough table name for logging
+                        table_name = statement.split('INSERT INTO')[1].split('(')[0].strip()
+                        logger.debug(f"📝 Inserting seed data into '{table_name}'...")
+                        await execute_db(statement)
+                        insert_count += 1
+                    except Exception as e:
+                        # Check if error is due to duplicate entry
+                        error_str = str(e).lower()
+                        if any(phrase in error_str for phrase in [
+                            'duplicate',
+                            'already exists',
+                            'unique',
+                            'constraint'
+                        ]):
+                            logger.debug(f"⏭️  Seed data already exists, skipping...")
+                        else:
+                            insert_errors += 1
+                            logger.warning(f"⚠️  Error inserting seed data: {str(e)}")
+
+            if insert_count > 0:
+                logger.info(f"✅ Inserted {insert_count} seed data records")
+            if insert_errors > 0:
+                logger.warning(f"⚠️  {insert_errors} seed data insertion errors (may be duplicates)")
+
+        except Exception as e:
+            logger.warning(f"⚠️  Error executing seed data: {str(e)}")
 
         return tables_created, tables_skipped, errors
     
@@ -243,105 +308,107 @@ class DatabaseInitializer:
 
         logger.warning("⚠️  Using fallback inline schema creation")
 
-        # Define table creation statements (with IF NOT EXISTS for safety)
+        # Define table creation statements
+        # Note: PesaDB doesn't support IF NOT EXISTS, DEFAULT, or NOT NULL in CREATE TABLE
+        # These are removed to match actual PesaDB capabilities
         table_statements = [
             # Users table
             (
                 "users",
-                """CREATE TABLE IF NOT EXISTS users (
+                """CREATE TABLE users (
     id STRING PRIMARY KEY,
-    pin_hash STRING NOT NULL,
+    pin_hash STRING,
     security_question STRING,
     security_answer_hash STRING,
-    created_at STRING NOT NULL,
-    preferences STRING DEFAULT '{}'
+    created_at STRING,
+    preferences STRING
 )"""
             ),
             # Categories table
             (
                 "categories",
-                """CREATE TABLE IF NOT EXISTS categories (
+                """CREATE TABLE categories (
     id STRING PRIMARY KEY,
     user_id STRING,
-    name STRING NOT NULL,
-    icon STRING NOT NULL,
-    color STRING NOT NULL,
-    keywords STRING DEFAULT '[]',
-    is_default BOOL DEFAULT TRUE
+    name STRING,
+    icon STRING,
+    color STRING,
+    keywords STRING,
+    is_default BOOL
 )"""
             ),
             # Transactions table
             (
                 "transactions",
-                """CREATE TABLE IF NOT EXISTS transactions (
+                """CREATE TABLE transactions (
     id STRING PRIMARY KEY,
-    user_id STRING NOT NULL,
-    amount REAL NOT NULL,
-    type STRING NOT NULL,
-    category_id STRING NOT NULL,
-    description STRING NOT NULL,
-    date STRING NOT NULL,
-    source STRING DEFAULT 'manual',
+    user_id STRING REFERENCES users(id),
+    amount FLOAT,
+    type STRING,
+    category_id STRING REFERENCES categories(id),
+    description STRING,
+    date STRING,
+    source STRING,
     mpesa_details STRING,
     sms_metadata STRING,
-    created_at STRING NOT NULL,
+    created_at STRING,
     transaction_group_id STRING,
-    transaction_role STRING DEFAULT 'primary',
+    transaction_role STRING,
     parent_transaction_id STRING
 )"""
             ),
             # Budgets table
             (
                 "budgets",
-                """CREATE TABLE IF NOT EXISTS budgets (
+                """CREATE TABLE budgets (
     id STRING PRIMARY KEY,
-    user_id STRING NOT NULL,
-    category_id STRING NOT NULL,
-    amount REAL NOT NULL,
-    period STRING DEFAULT 'monthly',
-    month INT NOT NULL,
-    year INT NOT NULL,
-    created_at STRING NOT NULL
+    user_id STRING REFERENCES users(id),
+    category_id STRING REFERENCES categories(id),
+    amount FLOAT,
+    period STRING,
+    month INT,
+    year INT,
+    created_at STRING
 )"""
             ),
             # SMS Import Logs table
             (
                 "sms_import_logs",
-                """CREATE TABLE IF NOT EXISTS sms_import_logs (
+                """CREATE TABLE sms_import_logs (
     id STRING PRIMARY KEY,
-    user_id STRING NOT NULL,
-    import_session_id STRING NOT NULL,
-    total_messages INT DEFAULT 0,
-    successful_imports INT DEFAULT 0,
-    duplicates_found INT DEFAULT 0,
-    parsing_errors INT DEFAULT 0,
-    transactions_created STRING DEFAULT '[]',
-    errors STRING DEFAULT '[]',
-    created_at STRING NOT NULL
+    user_id STRING REFERENCES users(id),
+    import_session_id STRING,
+    total_messages INT,
+    successful_imports INT,
+    duplicates_found INT,
+    parsing_errors INT,
+    transactions_created STRING,
+    errors STRING,
+    created_at STRING
 )"""
             ),
             # Duplicate Logs table
             (
                 "duplicate_logs",
-                """CREATE TABLE IF NOT EXISTS duplicate_logs (
+                """CREATE TABLE duplicate_logs (
     id STRING PRIMARY KEY,
-    user_id STRING NOT NULL,
+    user_id STRING REFERENCES users(id),
     original_transaction_id STRING,
     duplicate_transaction_id STRING,
     message_hash STRING,
     mpesa_transaction_id STRING,
     reason STRING,
-    similarity_score REAL,
-    detected_at STRING NOT NULL
+    similarity_score FLOAT,
+    detected_at STRING
 )"""
             ),
             # Status Checks table
             (
                 "status_checks",
-                """CREATE TABLE IF NOT EXISTS status_checks (
+                """CREATE TABLE status_checks (
     id STRING PRIMARY KEY,
-    status STRING NOT NULL,
-    timestamp STRING NOT NULL,
+    status STRING,
+    timestamp STRING,
     details STRING
 )"""
             ),
@@ -349,7 +416,15 @@ class DatabaseInitializer:
 
         for table_name, create_statement in table_statements:
             try:
-                # Try to create the table directly (IF NOT EXISTS will prevent errors)
+                # Check if table already exists first
+                exists = await DatabaseInitializer.table_exists(table_name)
+
+                if exists:
+                    logger.info(f"✅ Table '{table_name}' already exists, skipping (inline)")
+                    tables_skipped += 1
+                    continue
+
+                # Try to create the table
                 logger.info(f"📝 Creating table '{table_name}' (inline)...")
                 logger.debug(f"SQL: {create_statement[:100].replace(chr(10), ' ')}...")
 
@@ -359,7 +434,7 @@ class DatabaseInitializer:
                 exists = await DatabaseInitializer.table_exists(table_name)
 
                 if exists:
-                    logger.info(f"✅ Table '{table_name}' created/verified successfully")
+                    logger.info(f"✅ Table '{table_name}' created successfully")
                     tables_created += 1
                 else:
                     error_msg = f"Table '{table_name}' creation reported success but verification failed"
@@ -368,10 +443,20 @@ class DatabaseInitializer:
                     tables_created += 1
 
             except Exception as e:
-                error_msg = f"Error creating table '{table_name}': {str(e)}"
-                logger.error(f"❌ {error_msg}")
-                logger.debug(f"Failed SQL: {create_statement[:200].replace(chr(10), ' ')}")
-                errors.append(error_msg)
+                error_str = str(e).lower()
+                # Check if error is because table already exists
+                if any(phrase in error_str for phrase in [
+                    'already exists',
+                    'table exists',
+                    'duplicate',
+                    'exist'
+                ]):\n                    logger.info(f"✅ Table '{table_name}' already exists (detected from error)")
+                    tables_skipped += 1
+                else:
+                    error_msg = f"Error creating table '{table_name}': {str(e)}"
+                    logger.error(f"❌ {error_msg}")
+                    logger.debug(f"Failed SQL: {create_statement[:200].replace(chr(10), ' ')}")
+                    errors.append(error_msg)
                 # Continue with other tables
 
         return tables_created, tables_skipped, errors
@@ -380,7 +465,9 @@ class DatabaseInitializer:
     async def seed_default_categories() -> int:
         """
         Seed default categories if none exist
-        
+        Note: This is now primarily handled by INSERT statements in the SQL file
+        This method remains as a fallback/verification
+
         Returns:
             Number of categories seeded
         """
@@ -388,11 +475,13 @@ class DatabaseInitializer:
             # Check if categories already exist
             categories_count = await query_db("SELECT COUNT(*) as count FROM categories")
             if categories_count and categories_count[0]['count'] > 0:
-                logger.info(f"✅ Categories already exist ({categories_count[0]['count']}), skipping seed")
+                logger.info(f"✅ Categories already seeded ({categories_count[0]['count']} exist)")
                 return 0
-            
-            logger.info("📦 Seeding default categories...")
-            
+
+            logger.warning("⚠️  No categories found - this should have been handled by SQL file")
+            logger.info("📦 Attempting fallback category seeding...")
+
+            # This is now a fallback - the SQL file should handle seeding
             default_categories = [
                 ('cat-food', 'Food & Dining', '🍔', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "nyama", "choma"]'),
                 ('cat-transport', 'Transport', '🚗', '#4ECDC4', '["taxi", "bus", "matatu", "uber", "fuel", "transport", "travel"]'),
@@ -404,13 +493,13 @@ class DatabaseInitializer:
                 ('cat-airtime', 'Airtime & Data', '📞', '#FFFFD2', '["airtime", "data", "bundles", "safaricom", "airtel", "telkom"]'),
                 ('cat-transfers', 'Money Transfer', '💸', '#FEC8D8', '["transfer", "send money", "mpesa", "paybill", "till"]'),
                 ('cat-savings', 'Savings & Investments', '💰', '#957DAD', '["savings", "investment", "deposit", "savings account", "mshwari", "kcb mpesa"]'),
+                ('cat-income', 'Income', '💵', '#90EE90', '["salary", "income", "payment", "received"]'),
                 ('cat-other', 'Other', '📌', '#D4A5A5', '[]'),
             ]
-            
+
             seeded_count = 0
             for cat_id, name, icon, color, keywords in default_categories:
                 try:
-                    # Note: PesaDB uses TRUE/FALSE for booleans and NULL for null values (without quotes)
                     # Escape single quotes in name for SQL safety
                     safe_name = name.replace("'", "''")
                     sql = f"""
@@ -422,10 +511,11 @@ class DatabaseInitializer:
                     logger.info(f"✅ Seeded category: {name}")
                 except Exception as e:
                     logger.warning(f"⚠️  Category '{name}' may already exist: {str(e)}")
-            
-            logger.info(f"✅ Seeded {seeded_count} default categories")
+
+            if seeded_count > 0:
+                logger.info(f"✅ Fallback seeded {seeded_count} default categories")
             return seeded_count
-            
+
         except Exception as e:
             logger.error(f"❌ Error seeding default categories: {str(e)}")
             return 0
