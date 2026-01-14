@@ -51,10 +51,11 @@ class DatabaseInitializer:
     async def table_exists(table_name: str) -> bool:
         """Check if a table exists in the database"""
         try:
-            # Try to query the table with a COUNT to check existence
-            # This is more reliable than LIMIT 0 for some databases
-            result = await query_db(f"SELECT COUNT(*) as count FROM {table_name} LIMIT 1")
+            # Try a simple SELECT query to check if table exists
+            # Use LIMIT 1 to minimize data transfer
+            result = await query_db(f"SELECT * FROM {table_name} LIMIT 1")
             # If we get here without exception, table exists
+            logger.debug(f"✅ Table '{table_name}' exists")
             return True
         except Exception as e:
             error_msg = str(e).lower()
@@ -64,13 +65,15 @@ class DatabaseInitializer:
                 'no such table',
                 'table not found',
                 'unknown table',
-                'tablenotfound'
+                'tablenotfound',
+                'not found'
             ]):
                 logger.debug(f"Table '{table_name}' does not exist: {str(e)}")
                 return False
             else:
-                # Other errors - log as warning but assume table doesn't exist
-                logger.warning(f"Error checking table '{table_name}': {str(e)}")
+                # Other errors (like syntax errors) - log as warning
+                # For deployment safety, assume table doesn't exist if we can't verify
+                logger.warning(f"⚠️  Error checking table '{table_name}': {str(e)}")
                 return False
     
     @staticmethod
