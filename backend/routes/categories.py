@@ -1,46 +1,39 @@
-from fastapi import APIRouter, HTTPException, Depends
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from fastapi import APIRouter, HTTPException
 from models.user import Category, CategoryCreate
+from services.pesadb_service import db_service
 from typing import List
-from bson import ObjectId
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
-async def get_db():
-    from server import db
-    return db
-
 @router.get("/", response_model=List[Category])
-async def get_categories(db: AsyncIOMotorDatabase = Depends(get_db)):
+async def get_categories():
     """Get all categories"""
     try:
-        categories_docs = await db.categories.find().to_list(100)
+        categories_docs = await db_service.get_categories(limit=100)
         categories = []
         for doc in categories_docs:
-            doc["id"] = str(doc["_id"])
-            del doc["_id"]
             categories.append(Category(**doc))
         return categories
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching categories: {str(e)}")
 
 @router.post("/", response_model=Category)
-async def create_category(category_data: CategoryCreate, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def create_category(category_data: CategoryCreate):
     """Create a new category"""
     try:
         category = Category(**category_data.dict(), is_default=False)
-        result = await db.categories.insert_one(category.dict())
-        category.id = str(result.inserted_id)
+        category_dict = category.dict()
+        await db_service.create_category(category_dict)
         return category
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating category: {str(e)}")
 
 @router.delete("/{category_id}")
-async def delete_category(category_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def delete_category(category_id: str):
     """Delete a category (only non-default categories)"""
     try:
         # Check if category exists and is not default
-        category_doc = await db.categories.find_one({"_id": ObjectId(category_id) if ObjectId.is_valid(category_id) else category_id})
+        category_doc = await db_service.get_category_by_id(category_id)
         if not category_doc:
             raise HTTPException(status_code=404, detail="Category not found")
         
@@ -48,14 +41,13 @@ async def delete_category(category_id: str, db: AsyncIOMotorDatabase = Depends(g
             raise HTTPException(status_code=400, detail="Cannot delete default category")
         
         # Check if category is being used by transactions
-        transaction_count = await db.transactions.count_documents({"category_id": category_id})
+        # Note: We need to get user_id, but for single-user app we can check all transactions
+        transaction_count = await db_service.count_transactions(user_id="", category_id=category_id)
         if transaction_count > 0:
             raise HTTPException(status_code=400, detail="Cannot delete category with existing transactions")
         
         # Delete category
-        result = await db.categories.delete_one({"_id": ObjectId(category_id) if ObjectId.is_valid(category_id) else category_id})
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Category not found")
+        await db_service.delete_category(category_id)
         
         return {"message": "Category deleted successfully"}
     except HTTPException:

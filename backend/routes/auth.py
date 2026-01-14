@@ -1,32 +1,27 @@
-from fastapi import APIRouter, HTTPException, Depends
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from fastapi import APIRouter, HTTPException
 from models.user import User, UserCreate, UserVerify, Category, SecurityAnswerVerify, PINReset
 from services.categorization import CategorizationService
+from services.pesadb_service import db_service
 import bcrypt
 import os
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-async def get_db():
-    from server import db
-    return db
-
 @router.post("/setup-pin")
-async def setup_pin(user_data: UserCreate, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def setup_pin(user_data: UserCreate):
     """Setup PIN for new user and create default categories"""
     import logging
     logger = logging.getLogger(__name__)
 
     try:
         logger.info(f"Setup PIN request received")
-        logger.info(f"Database connection: {db}")
 
         # Check if user already exists (for demo, we'll use a single user)
         logger.info("Checking for existing user...")
-        existing_user = await db.users.find_one({})
-        logger.info(f"Existing user check complete: {existing_user is not None}")
+        user_count = await db_service.get_user_count()
+        logger.info(f"Existing user check complete: {user_count > 0}")
 
-        if existing_user:
+        if user_count > 0:
             raise HTTPException(status_code=400, detail="User already exists")
 
         # Hash the PIN
@@ -48,15 +43,18 @@ async def setup_pin(user_data: UserCreate, db: AsyncIOMotorDatabase = Depends(ge
         )
 
         # Insert user
-        result = await db.users.insert_one(user.dict())
-        user_id = str(result.inserted_id)
+        user_data_dict = user.dict()
+        user_data_dict['created_at'] = user_data_dict['created_at'].isoformat()
+        await db_service.create_user(user_data_dict)
+        user_id = user.id
 
         # Create default categories
         default_categories = CategorizationService.get_default_categories()
         categories = []
         for cat_data in default_categories:
             category = Category(**cat_data)
-            await db.categories.insert_one(category.dict())
+            category_dict = category.dict()
+            await db_service.create_category(category_dict)
             categories.append(category)
 
         return {
@@ -74,11 +72,11 @@ async def setup_pin(user_data: UserCreate, db: AsyncIOMotorDatabase = Depends(ge
         raise HTTPException(status_code=500, detail=f"Error setting up PIN: {str(e)}")
 
 @router.post("/verify-pin")
-async def verify_pin(verify_data: UserVerify, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def verify_pin(verify_data: UserVerify):
     """Verify user PIN"""
     try:
         # Get user (for demo, get the first user)
-        user_doc = await db.users.find_one({})
+        user_doc = await db_service.get_user()
         if not user_doc:
             raise HTTPException(status_code=404, detail="User not found. Please setup PIN first.")
         
@@ -91,7 +89,7 @@ async def verify_pin(verify_data: UserVerify, db: AsyncIOMotorDatabase = Depends
         
         return {
             "message": "PIN verified successfully",
-            "user_id": str(user_doc["_id"])
+            "user_id": user_doc["id"]
         }
         
     except HTTPException:
@@ -100,25 +98,25 @@ async def verify_pin(verify_data: UserVerify, db: AsyncIOMotorDatabase = Depends
         raise HTTPException(status_code=500, detail=f"Error verifying PIN: {str(e)}")
 
 @router.get("/user-status")
-async def get_user_status(db: AsyncIOMotorDatabase = Depends(get_db)):
+async def get_user_status():
     """Check if user exists and has PIN setup"""
     try:
-        user_doc = await db.users.find_one({})
-        categories_count = await db.categories.count_documents({})
+        user_doc = await db_service.get_user()
+        categories_count = await db_service.count_categories()
 
         return {
             "has_user": user_doc is not None,
-            "user_id": str(user_doc["_id"]) if user_doc else None,
+            "user_id": user_doc["id"] if user_doc else None,
             "categories_count": categories_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking user status: {str(e)}")
 
 @router.get("/security-question")
-async def get_security_question(db: AsyncIOMotorDatabase = Depends(get_db)):
+async def get_security_question():
     """Get the security question for PIN reset"""
     try:
-        user_doc = await db.users.find_one({})
+        user_doc = await db_service.get_user()
         if not user_doc:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -134,10 +132,10 @@ async def get_security_question(db: AsyncIOMotorDatabase = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error fetching security question: {str(e)}")
 
 @router.post("/verify-security-answer")
-async def verify_security_answer(verify_data: SecurityAnswerVerify, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def verify_security_answer(verify_data: SecurityAnswerVerify):
     """Verify the security answer for PIN reset"""
     try:
-        user_doc = await db.users.find_one({})
+        user_doc = await db_service.get_user()
         if not user_doc:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -162,10 +160,10 @@ async def verify_security_answer(verify_data: SecurityAnswerVerify, db: AsyncIOM
         raise HTTPException(status_code=500, detail=f"Error verifying security answer: {str(e)}")
 
 @router.post("/reset-pin")
-async def reset_pin(reset_data: PINReset, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def reset_pin(reset_data: PINReset):
     """Reset user PIN after security verification"""
     try:
-        user_doc = await db.users.find_one({})
+        user_doc = await db_service.get_user()
         if not user_doc:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -185,9 +183,9 @@ async def reset_pin(reset_data: PINReset, db: AsyncIOMotorDatabase = Depends(get
         new_pin_hash = bcrypt.hashpw(reset_data.new_pin.encode('utf-8'), bcrypt.gensalt())
 
         # Update PIN
-        await db.users.update_one(
-            {"_id": user_doc["_id"]},
-            {"$set": {"pin_hash": new_pin_hash.decode('utf-8')}}
+        await db_service.update_user_pin(
+            user_doc["id"],
+            new_pin_hash.decode('utf-8')
         )
 
         return {

@@ -1,27 +1,19 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from models.transaction import Transaction, TransactionCreate, SMSParseRequest, SMSImportRequest, SMSImportResponse, SMSMetadata
 from models.user import Category
 from services.mpesa_parser import MPesaParser
 from services.enhanced_sms_parser import EnhancedSMSParser
 from services.duplicate_detector import DuplicateDetector
 from services.categorization import CategorizationService
+from services.pesadb_service import db_service
 from typing import List, Dict, Any
 import uuid
 from datetime import datetime
-from bson import ObjectId
 
 router = APIRouter(prefix="/sms", tags=["sms-integration"])
 
-async def get_db():
-    from server import db
-    return db
-
 @router.post("/parse", response_model=Dict[str, Any])
-async def parse_single_sms(
-    request: SMSParseRequest,
-    db: AsyncIOMotorDatabase = Depends(get_db)
-):
+async def parse_single_sms(request: SMSParseRequest):
     """Parse a single SMS message and return transaction details"""
     try:
         print(f"DEBUG: Received message: {repr(request.message)}")
@@ -35,8 +27,8 @@ async def parse_single_sms(
             raise HTTPException(status_code=400, detail="Message could not be parsed as M-Pesa transaction")
         
         # Get categories for auto-categorization
-        categories_docs = await db.categories.find().to_list(100)
-        categories = [Category(**{**doc, "id": str(doc["_id"])}) for doc in categories_docs]
+        categories_data = await db_service.get_categories(limit=100)
+        categories = [Category(**{**cat, "id": cat.get("id")}) for cat in categories_data]
         
         # Auto-categorize if needed
         if parsed_data['suggested_category']:
@@ -45,9 +37,9 @@ async def parse_single_sms(
                 parsed_data['suggested_category_id'] = category_match.id
 
         # Also provide enhanced transaction breakdown preview
-        user_doc = await db.users.find_one({})
-        if user_doc:
-            user_id = str(user_doc["_id"])
+        user_data = await db_service.get_user()
+        if user_data:
+            user_id = user_data["id"]
 
             # Create category mapping for enhanced parser
             category_mapping = {}
@@ -87,21 +79,20 @@ async def parse_single_sms(
 @router.post("/import", response_model=SMSImportResponse)
 async def import_sms_messages(
     import_request: SMSImportRequest,
-    background_tasks: BackgroundTasks,
-    db: AsyncIOMotorDatabase = Depends(get_db)
+    background_tasks: BackgroundTasks
 ):
     """Import multiple SMS messages as transactions"""
     try:
         # Get user (for demo, use first user)
-        user_doc = await db.users.find_one({})
-        if not user_doc:
+        user_data = await db_service.get_user()
+        if not user_data:
             raise HTTPException(status_code=404, detail="User not found")
         
-        user_id = str(user_doc["_id"])
+        user_id = user_data["id"]
         
         # Get categories
-        categories_docs = await db.categories.find().to_list(100)
-        categories = [Category(**{**doc, "id": str(doc["_id"])}) for doc in categories_docs]
+        categories_data = await db_service.get_categories(limit=100)
+        categories = [Category(**{**cat, "id": cat.get("id")}) for cat in categories_data]
         
         # Track import results
         import_session_id = str(uuid.uuid4())
@@ -124,9 +115,7 @@ async def import_sms_messages(
 
                 # Check for duplicates first
                 message_hash = DuplicateDetector.hash_message(message)
-                existing_transaction = await db.transactions.find_one({
-                    "sms_metadata.original_message_hash": message_hash
-                })
+                existing_transaction = await db_service.get_transaction_by_message_hash(message_hash)
 
                 if existing_transaction:
                     print(f"Duplicate found for message {i+1}")
@@ -153,24 +142,39 @@ async def import_sms_messages(
                 # Insert all transactions from this SMS
                 group_transaction_ids = []
                 for transaction_create in enhanced_transactions:
-                    transaction = Transaction(
-                        user_id=user_id,
-                        **transaction_create.dict()
-                    )
+                    # Create transaction data
+                    transaction_data = {
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "amount": transaction_create.amount,
+                        "type": transaction_create.type,
+                        "category_id": transaction_create.category_id,
+                        "description": transaction_create.description,
+                        "date": transaction_create.date.isoformat() if transaction_create.date else datetime.utcnow().isoformat(),
+                        "source": transaction_create.source,
+                        "mpesa_details": transaction_create.mpesa_details,
+                        "sms_metadata": transaction_create.sms_metadata.dict() if transaction_create.sms_metadata else None,
+                        "created_at": datetime.utcnow().isoformat()
+                    }
 
-                    result = await db.transactions.insert_one(transaction.dict())
-                    transaction_id = str(result.inserted_id)
-                    transaction.id = transaction_id
+                    # Add optional fields if present
+                    if hasattr(transaction_create, 'transaction_role'):
+                        transaction_data['transaction_role'] = transaction_create.transaction_role
+                    if hasattr(transaction_create, 'transaction_group_id'):
+                        transaction_data['transaction_group_id'] = transaction_create.transaction_group_id
+
+                    await db_service.create_transaction(transaction_data)
+                    transaction_id = transaction_data["id"]
 
                     group_transaction_ids.append(transaction_id)
                     transactions_created.append(transaction_id)
                     total_monetary_movements += 1
 
-                    print(f"Created {transaction_create.transaction_role} transaction {transaction_id}: {transaction_create.description} - KSh {transaction_create.amount}")
+                    print(f"Created {transaction_create.transaction_role if hasattr(transaction_create, 'transaction_role') else 'transaction'} {transaction_id}: {transaction_create.description} - KSh {transaction_create.amount}")
 
                 # Track the transaction group
                 if enhanced_transactions:
-                    group_id = enhanced_transactions[0].transaction_group_id
+                    group_id = enhanced_transactions[0].transaction_group_id if hasattr(enhanced_transactions[0], 'transaction_group_id') else None
                     transaction_groups_created.append({
                         "group_id": group_id,
                         "transaction_ids": group_transaction_ids,
@@ -186,19 +190,20 @@ async def import_sms_messages(
         
         # Log import session
         import_log = {
+            "id": import_session_id,
             "import_session_id": import_session_id,
             "user_id": user_id,
             "messages_processed": len(import_request.messages),
-            "transactions_created": successful_imports,
+            "transactions_created": transactions_created,  # Will be JSON stringified by db_service
             "duplicates_found": duplicates_found,
             "parsing_errors": parsing_errors,
-            "errors": errors,
-            "completed_at": datetime.utcnow(),
+            "errors": errors,  # Will be JSON stringified by db_service
+            "completed_at": datetime.utcnow().isoformat(),
             "auto_categorize": import_request.auto_categorize,
             "require_review": import_request.require_review
         }
         
-        await db.sms_import_logs.insert_one(import_log)
+        await db_service.create_sms_import_log(import_log)
         
         return {
             "total_messages": len(import_request.messages),
@@ -216,19 +221,12 @@ async def import_sms_messages(
         raise HTTPException(status_code=500, detail=f"Error importing SMS messages: {str(e)}")
 
 @router.get("/import-status/{import_session_id}")
-async def get_import_status(
-    import_session_id: str,
-    db: AsyncIOMotorDatabase = Depends(get_db)
-):
+async def get_import_status(import_session_id: str):
     """Get the status of an SMS import session"""
     try:
-        import_log = await db.sms_import_logs.find_one({"import_session_id": import_session_id})
+        import_log = await db_service.get_sms_import_log(import_session_id)
         if not import_log:
             raise HTTPException(status_code=404, detail="Import session not found")
-        
-        # Remove ObjectId for JSON serialization
-        import_log["id"] = str(import_log["_id"])
-        del import_log["_id"]
         
         return import_log
         
@@ -238,20 +236,17 @@ async def get_import_status(
         raise HTTPException(status_code=500, detail=f"Error getting import status: {str(e)}")
 
 @router.get("/duplicate-stats")
-async def get_duplicate_statistics(
-    days: int = 30,
-    db: AsyncIOMotorDatabase = Depends(get_db)
-):
+async def get_duplicate_statistics(days: int = 30):
     """Get duplicate detection statistics"""
     try:
         # Get user (for demo, use first user)
-        user_doc = await db.users.find_one({})
-        if not user_doc:
+        user_data = await db_service.get_user()
+        if not user_data:
             raise HTTPException(status_code=404, detail="User not found")
         
-        user_id = str(user_doc["_id"])
+        user_id = user_data["id"]
         
-        stats = await DuplicateDetector.get_duplicate_statistics(db, user_id, days)
+        stats = await DuplicateDetector.get_duplicate_statistics(user_id, days)
         return stats
         
     except Exception as e:
@@ -260,26 +255,24 @@ async def get_duplicate_statistics(
 @router.post("/create-transaction")
 async def create_transaction_from_parsed_sms(
     parsed_data: Dict[str, Any],
-    category_id: str,
-    db: AsyncIOMotorDatabase = Depends(get_db)
+    category_id: str
 ):
     """Create a transaction from already parsed SMS data"""
     try:
         # Get user (for demo, use first user)
-        user_doc = await db.users.find_one({})
-        if not user_doc:
+        user_data = await db_service.get_user()
+        if not user_data:
             raise HTTPException(status_code=404, detail="User not found")
         
-        user_id = str(user_doc["_id"])
+        user_id = user_data["id"]
         
         # Verify category exists
-        category_doc = await db.categories.find_one({"_id": ObjectId(category_id) if ObjectId.is_valid(category_id) else category_id})
-        if not category_doc:
+        category_data = await db_service.get_category_by_id(category_id)
+        if not category_data:
             raise HTTPException(status_code=404, detail="Category not found")
         
         # Check for duplicates one more time
         duplicate_check = await DuplicateDetector.check_comprehensive_duplicate(
-            db=db,
             user_id=user_id,
             amount=parsed_data['amount'],
             transaction_id=parsed_data.get('mpesa_details', {}).get('transaction_id'),
@@ -291,12 +284,12 @@ async def create_transaction_from_parsed_sms(
             raise HTTPException(status_code=400, detail="Duplicate transaction detected")
         
         # Create SMS metadata
-        sms_metadata = SMSMetadata(
-            original_message_hash=parsed_data.get('original_message_hash'),
-            parsing_confidence=parsed_data.get('parsing_confidence', 0.5),
-            requires_review=False,  # User has reviewed and confirmed
-            suggested_category=parsed_data.get('suggested_category')
-        )
+        sms_metadata = {
+            "original_message_hash": parsed_data.get('original_message_hash'),
+            "parsing_confidence": parsed_data.get('parsing_confidence', 0.5),
+            "requires_review": False,  # User has reviewed and confirmed
+            "suggested_category": parsed_data.get('suggested_category')
+        }
         
         # Use extracted transaction date if available, otherwise use current time
         transaction_date = datetime.now()
@@ -307,22 +300,23 @@ async def create_transaction_from_parsed_sms(
                 transaction_date = datetime.now()
 
         # Create transaction
-        transaction_data = TransactionCreate(
-            amount=parsed_data['amount'],
-            type=parsed_data['type'],
-            category_id=category_id,
-            description=parsed_data['description'],
-            date=transaction_date,
-            source="sms",
-            mpesa_details=parsed_data.get('mpesa_details'),
-            sms_metadata=sms_metadata
-        )
+        transaction_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "amount": parsed_data['amount'],
+            "type": parsed_data['type'],
+            "category_id": category_id,
+            "description": parsed_data['description'],
+            "date": transaction_date.isoformat(),
+            "source": "sms",
+            "mpesa_details": parsed_data.get('mpesa_details'),
+            "sms_metadata": sms_metadata,
+            "created_at": datetime.utcnow().isoformat()
+        }
         
-        transaction = Transaction(**transaction_data.dict(), user_id=user_id)
-        result = await db.transactions.insert_one(transaction.dict())
-        transaction.id = str(result.inserted_id)
+        await db_service.create_transaction(transaction_data)
         
-        return transaction
+        return transaction_data
         
     except HTTPException:
         raise
