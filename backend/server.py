@@ -16,6 +16,7 @@ load_dotenv(ROOT_DIR / '.env')
 # PesaDB configuration (replaces MongoDB)
 from config.pesadb import get_client
 from services.pesadb_service import db_service
+from services.database_initializer import db_initializer
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -65,21 +66,37 @@ async def health_check():
         # Test database connectivity with PesaDB
         pesadb_api_url = os.environ.get('PESADB_API_URL', 'NOT_SET')
         pesadb_database = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
-        
-        # Try a simple query to test connection
-        await db_service.count_transactions("")  # Empty user_id is ok for health check
+
+        # Try a simple query to test connection and verify tables exist
+        transaction_count = await db_service.count_transactions("")
+        user_count = await db_service.get_user_count()
+        category_count = await db_service.count_categories()
+
         db_status = "connected"
+        db_initialized = True
     except Exception as e:
         db_status = f"error: {str(e)}"
+        db_initialized = False
+        transaction_count = 0
+        user_count = 0
+        category_count = 0
 
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "database": db_status,
-        "database_type": "PesaDB",
-        "pesadb_api_url": pesadb_api_url,
-        "pesadb_database": pesadb_database,
-        "pesadb_api_key_set": os.environ.get('PESADB_API_KEY') is not None,
+        "database": {
+            "status": db_status,
+            "initialized": db_initialized,
+            "type": "PesaDB",
+            "api_url": pesadb_api_url,
+            "database_name": pesadb_database,
+            "api_key_configured": os.environ.get('PESADB_API_KEY') is not None,
+            "stats": {
+                "users": user_count,
+                "categories": category_count,
+                "transactions": transaction_count
+            }
+        },
         "message": "M-Pesa Expense Tracker Backend is running (PesaDB)"
     }
 
@@ -115,6 +132,24 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_db_initialization():
+    """Initialize database on startup"""
+    logger.info("🚀 Server starting up - checking database...")
+    try:
+        result = await db_initializer.initialize_database(seed_categories=True)
+
+        if result['success']:
+            logger.info(f"✅ Database ready: {result['tables_created']} tables created, "
+                       f"{result['tables_skipped']} existed, "
+                       f"{result['categories_seeded']} categories seeded")
+        else:
+            logger.warning(f"⚠️  Database initialization had issues: {result['message']}")
+            logger.warning("The server will continue, but some features may not work properly")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {str(e)}")
+        logger.warning("The server will continue, but database operations may fail")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
