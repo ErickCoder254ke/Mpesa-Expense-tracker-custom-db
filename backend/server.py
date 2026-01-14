@@ -68,13 +68,20 @@ async def health_check():
         # Test database connectivity
         await db.admin.command('ping')
         db_status = "connected"
+        mongo_uri = os.environ.get('MONGO_URL', 'NOT_SET')
+        # Hide password in URI for security
+        safe_uri = mongo_uri.replace(mongo_uri.split('@')[0].split('//')[1], '***') if '@' in mongo_uri else mongo_uri
     except Exception as e:
         db_status = f"error: {str(e)}"
+        safe_uri = "N/A"
 
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "database": db_status,
+        "mongo_url_set": os.environ.get('MONGO_URL') is not None,
+        "mongo_url": safe_uri,
+        "db_name": db_name,
         "message": "M-Pesa Expense Tracker Backend is running"
     }
 

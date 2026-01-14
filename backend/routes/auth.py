@@ -14,9 +14,18 @@ async def get_db():
 @router.post("/setup-pin")
 async def setup_pin(user_data: UserCreate, db: AsyncIOMotorDatabase = Depends(get_db)):
     """Setup PIN for new user and create default categories"""
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
+        logger.info(f"Setup PIN request received")
+        logger.info(f"Database connection: {db}")
+
         # Check if user already exists (for demo, we'll use a single user)
+        logger.info("Checking for existing user...")
         existing_user = await db.users.find_one({})
+        logger.info(f"Existing user check complete: {existing_user is not None}")
+
         if existing_user:
             raise HTTPException(status_code=400, detail="User already exists")
 
@@ -56,7 +65,12 @@ async def setup_pin(user_data: UserCreate, db: AsyncIOMotorDatabase = Depends(ge
             "categories": len(categories)
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Error setting up PIN: {str(e)}", exc_info=True)
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error setting up PIN: {str(e)}")
 
 @router.post("/verify-pin")
