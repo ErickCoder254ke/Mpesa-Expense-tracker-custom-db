@@ -174,7 +174,7 @@ class BudgetMonitoringService:
         total_query = f"""
         SELECT
             SUM(amount) as total_spent,
-            COUNT(1) as transaction_count,
+            COUNT(*) as transaction_count,
             AVG(amount) as avg_transaction,
             MAX(amount) as max_transaction,
             MIN(amount) as min_transaction
@@ -205,7 +205,7 @@ class BudgetMonitoringService:
         SELECT
             date,
             SUM(amount) as daily_amount,
-            COUNT(1) as daily_count
+            COUNT(*) as daily_count
         FROM transactions
         WHERE user_id = '{user_id}'
         AND category_id = '{category_id}'

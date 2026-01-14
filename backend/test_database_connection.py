@@ -76,7 +76,7 @@ async def test_connection():
     # Test 3: Query the test table
     print("🔍 Test 3: Querying test table...")
     try:
-        result = await query_db("SELECT COUNT(1) as count FROM test_table")
+        result = await query_db("SELECT COUNT(*) as count FROM test_table")
         count = result[0]['count'] if result else 0
         print(f"✅ Test table query successful (count: {count})")
     except Exception as e:

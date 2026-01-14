@@ -474,7 +474,7 @@ class DatabaseInitializer:
         """
         try:
             # Check if categories already exist
-            categories_count = await query_db("SELECT COUNT(1) as count FROM categories")
+            categories_count = await query_db("SELECT COUNT(*) as count FROM categories")
             if categories_count and categories_count[0]['count'] > 0:
                 logger.info(f"✅ Categories already seeded ({categories_count[0]['count']} exist)")
                 return 0

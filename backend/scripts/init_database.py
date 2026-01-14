@@ -115,7 +115,7 @@ async def verify_setup():
         tables = ['users', 'categories', 'transactions', 'budgets']
         
         for table in tables:
-            result = await query_db(f"SELECT COUNT(1) as count FROM {table}")
+            result = await query_db(f"SELECT COUNT(*) as count FROM {table}")
             count = result[0]['count'] if result else 0
             print(f"✅ Table '{table}' exists with {count} rows")
         

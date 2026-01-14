@@ -29,7 +29,7 @@ class PesaDBService:
     async def get_user_count() -> int:
         """Get total number of users"""
         try:
-            result = await query_db("SELECT COUNT(1) as count FROM users")
+            result = await query_db("SELECT COUNT(*) as count FROM users")
             return result[0]['count'] if result else 0
         except Exception as e:
             if is_table_not_found_error(e):
@@ -108,7 +108,7 @@ class PesaDBService:
     async def count_categories() -> int:
         """Count total categories"""
         try:
-            result = await query_db("SELECT COUNT(1) as count FROM categories")
+            result = await query_db("SELECT COUNT(*) as count FROM categories")
             return result[0]['count'] if result else 0
         except Exception as e:
             if is_table_not_found_error(e):
@@ -233,7 +233,7 @@ class PesaDBService:
         if category_id:
             where_clause += f" AND category_id = '{category_id}'"
         
-        result = await query_db(f"SELECT COUNT(1) as count FROM transactions WHERE {where_clause}")
+        result = await query_db(f"SELECT COUNT(*) as count FROM transactions WHERE {where_clause}")
         return result[0]['count'] if result else 0
     
     @staticmethod
@@ -448,7 +448,7 @@ class PesaDBService:
     async def count_duplicate_logs(user_id: str) -> int:
         """Count duplicate logs for a user"""
         result = await query_db(f"""
-        SELECT COUNT(1) as count FROM duplicate_logs
+        SELECT COUNT(*) as count FROM duplicate_logs
         WHERE user_id = '{user_id}'
         """)
         return result[0]['count'] if result else 0
@@ -512,7 +512,7 @@ class PesaDBService:
         SELECT
             category_id,
             SUM(amount) as total,
-            COUNT(1) as transaction_count
+            COUNT(*) as transaction_count
         FROM transactions
         WHERE user_id = '{user_id}'
         AND type = 'expense'
