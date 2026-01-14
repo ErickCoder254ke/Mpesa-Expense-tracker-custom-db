@@ -11,6 +11,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def setup_pin(user_data: UserCreate):
     """Setup PIN for new user and create default categories"""
     import logging
+    import json
     logger = logging.getLogger(__name__)
 
     try:
@@ -22,7 +23,48 @@ async def setup_pin(user_data: UserCreate):
         logger.info(f"Existing user check complete: {user_count > 0}")
 
         if user_count > 0:
-            raise HTTPException(status_code=400, detail="User already exists")
+            # Check if the existing user is a default user (has is_default preference)
+            existing_user = await db_service.get_user()
+            if existing_user:
+                preferences = existing_user.get('preferences', '{}')
+                if isinstance(preferences, str):
+                    preferences = json.loads(preferences)
+
+                # If it's a default user, allow updating the PIN
+                if preferences.get('is_default'):
+                    logger.info("Updating default user with new PIN...")
+
+                    # Hash the new PIN
+                    pin_hash = bcrypt.hashpw(user_data.pin.encode('utf-8'), bcrypt.gensalt())
+
+                    # Hash security answer if provided
+                    security_answer_hash = None
+                    if user_data.security_answer:
+                        normalized_answer = user_data.security_answer.lower().strip()
+                        security_answer_hash = bcrypt.hashpw(normalized_answer.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+                    # Update user PIN and remove default flag
+                    await db_service.update_user_pin(existing_user['id'], pin_hash.decode('utf-8'))
+
+                    # Update preferences to remove default flag
+                    from config.pesadb import build_update, execute_db
+                    update_data = {
+                        'security_question': user_data.security_question,
+                        'security_answer_hash': security_answer_hash,
+                        'preferences': json.dumps({"default_currency": "KES", "is_default": False})
+                    }
+                    sql = build_update('users', update_data, f"id = '{existing_user['id']}'")
+                    await execute_db(sql)
+
+                    logger.info("Default user updated successfully")
+
+                    return {
+                        "message": "PIN setup successful (default user updated)",
+                        "user_id": existing_user['id'],
+                        "categories": await db_service.count_categories()
+                    }
+                else:
+                    raise HTTPException(status_code=400, detail="User already exists")
 
         # Hash the PIN
         pin_hash = bcrypt.hashpw(user_data.pin.encode('utf-8'), bcrypt.gensalt())

@@ -12,6 +12,14 @@ from datetime import datetime, timedelta
 from config.pesadb import query_db, execute_db, escape_string, build_insert, build_update, build_delete
 
 
+def is_table_not_found_error(error: Exception) -> bool:
+    """Check if an error is related to a missing table"""
+    error_msg = str(error).lower()
+    return (
+        "table" in error_msg and "does not exist" in error_msg
+    ) or "tablenotfound" in error_msg or "no such table" in error_msg
+
+
 class PesaDBService:
     """Service class for PesaDB operations"""
     
@@ -20,14 +28,26 @@ class PesaDBService:
     @staticmethod
     async def get_user_count() -> int:
         """Get total number of users"""
-        result = await query_db("SELECT COUNT(*) as count FROM users")
-        return result[0]['count'] if result else 0
-    
+        try:
+            result = await query_db("SELECT COUNT(*) as count FROM users")
+            return result[0]['count'] if result else 0
+        except Exception as e:
+            if is_table_not_found_error(e):
+                # Table doesn't exist yet - return 0
+                return 0
+            raise
+
     @staticmethod
     async def get_user() -> Optional[Dict[str, Any]]:
         """Get the first user (single-user app)"""
-        result = await query_db("SELECT * FROM users LIMIT 1")
-        return result[0] if result else None
+        try:
+            result = await query_db("SELECT * FROM users LIMIT 1")
+            return result[0] if result else None
+        except Exception as e:
+            if is_table_not_found_error(e):
+                # Table doesn't exist yet - return None
+                return None
+            raise
     
     @staticmethod
     async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,8 +107,13 @@ class PesaDBService:
     @staticmethod
     async def count_categories() -> int:
         """Count total categories"""
-        result = await query_db("SELECT COUNT(*) as count FROM categories")
-        return result[0]['count'] if result else 0
+        try:
+            result = await query_db("SELECT COUNT(*) as count FROM categories")
+            return result[0]['count'] if result else 0
+        except Exception as e:
+            if is_table_not_found_error(e):
+                return 0
+            raise
     
     # ==================== TRANSACTION OPERATIONS ====================
     

@@ -256,56 +256,134 @@ class DatabaseInitializer:
             return False
     
     @staticmethod
-    async def initialize_database(seed_categories: bool = True) -> dict:
+    async def create_default_user() -> dict:
+        """
+        Create a default user if none exists
+
+        Returns:
+            Dictionary with user creation result
+        """
+        try:
+            from services.pesadb_service import db_service
+            import bcrypt
+            import uuid
+            from datetime import datetime
+
+            # Check if user already exists
+            user_count = await db_service.get_user_count()
+
+            if user_count > 0:
+                logger.info(f"✅ User already exists, skipping default user creation")
+                return {
+                    'created': False,
+                    'message': 'User already exists',
+                    'user_id': None
+                }
+
+            logger.info("📝 Creating default user...")
+
+            # Create default user with PIN "0000" (user should change this)
+            default_pin = "0000"
+            pin_hash = bcrypt.hashpw(default_pin.encode('utf-8'), bcrypt.gensalt())
+
+            user_data = {
+                'id': str(uuid.uuid4()),
+                'pin_hash': pin_hash.decode('utf-8'),
+                'security_question': 'What is your favorite color?',
+                'security_answer_hash': None,  # User should set this during first login
+                'created_at': datetime.utcnow().isoformat(),
+                'preferences': '{"default_currency": "KES", "is_default": true}'
+            }
+
+            await db_service.create_user(user_data)
+
+            logger.info(f"✅ Default user created with ID: {user_data['id']}")
+            logger.warning("⚠️  Default PIN is '0000' - user should change this during first login")
+
+            return {
+                'created': True,
+                'message': 'Default user created successfully',
+                'user_id': user_data['id']
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Error creating default user: {str(e)}")
+            return {
+                'created': False,
+                'message': f'Error: {str(e)}',
+                'user_id': None
+            }
+
+    @staticmethod
+    async def initialize_database(seed_categories: bool = True, create_default_user: bool = True) -> dict:
         """
         Main initialization function - creates tables and optionally seeds data
-        
+
         Args:
             seed_categories: Whether to seed default categories
-        
+            create_default_user: Whether to create a default user if none exists
+
         Returns:
             Dictionary with initialization results
         """
         logger.info("🚀 Starting automatic database initialization...")
-        
+
         result = {
             'success': False,
             'tables_created': 0,
             'tables_skipped': 0,
             'categories_seeded': 0,
+            'user_created': False,
             'verified': False,
-            'message': ''
+            'message': '',
+            'errors': []
         }
-        
+
         try:
             # Step 1: Create tables
+            logger.info("📝 Step 1: Creating tables...")
             tables_created, tables_skipped = await DatabaseInitializer.create_tables()
             result['tables_created'] = tables_created
             result['tables_skipped'] = tables_skipped
-            
+
             logger.info(f"📊 Tables: {tables_created} created, {tables_skipped} already existed")
-            
-            # Step 2: Seed default categories if requested
-            if seed_categories:
-                categories_seeded = await DatabaseInitializer.seed_default_categories()
-                result['categories_seeded'] = categories_seeded
-            
-            # Step 3: Verify database
+
+            # Step 2: Verify database
+            logger.info("📝 Step 2: Verifying database...")
             verified = await DatabaseInitializer.verify_database()
             result['verified'] = verified
-            
-            if verified:
-                result['success'] = True
-                result['message'] = 'Database initialized successfully'
-                logger.info("✅ Database initialization completed successfully")
-            else:
-                result['message'] = 'Database verification failed'
-                logger.error("❌ Database initialization completed with errors")
-            
+
+            if not verified:
+                error_msg = 'Database verification failed - some tables are missing'
+                result['errors'].append(error_msg)
+                logger.error(f"❌ {error_msg}")
+                result['message'] = error_msg
+                return result
+
+            # Step 3: Seed default categories if requested
+            if seed_categories:
+                logger.info("📝 Step 3: Seeding default categories...")
+                categories_seeded = await DatabaseInitializer.seed_default_categories()
+                result['categories_seeded'] = categories_seeded
+
+            # Step 4: Create default user if requested
+            if create_default_user:
+                logger.info("📝 Step 4: Creating default user if needed...")
+                user_result = await DatabaseInitializer.create_default_user()
+                result['user_created'] = user_result['created']
+                if user_result.get('user_id'):
+                    result['user_id'] = user_result['user_id']
+
+            result['success'] = True
+            result['message'] = 'Database initialized successfully'
+            logger.info("✅ Database initialization completed successfully")
+
         except Exception as e:
-            result['message'] = f'Initialization error: {str(e)}'
-            logger.error(f"❌ Database initialization failed: {str(e)}")
-        
+            error_msg = f'Initialization error: {str(e)}'
+            result['message'] = error_msg
+            result['errors'].append(error_msg)
+            logger.error(f"❌ Database initialization failed: {str(e)}", exc_info=True)
+
         return result
 
 

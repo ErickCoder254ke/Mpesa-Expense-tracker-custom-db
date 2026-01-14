@@ -68,12 +68,18 @@ async def health_check():
         pesadb_database = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
 
         # Try a simple query to test connection and verify tables exist
-        transaction_count = await db_service.count_transactions("")
         user_count = await db_service.get_user_count()
         category_count = await db_service.count_categories()
 
+        # Only count transactions if user exists
+        if user_count > 0:
+            user_doc = await db_service.get_user()
+            transaction_count = await db_service.count_transactions(user_doc["id"]) if user_doc else 0
+        else:
+            transaction_count = 0
+
         db_status = "connected"
-        db_initialized = True
+        db_initialized = user_count > 0 and category_count > 0
     except Exception as e:
         db_status = f"error: {str(e)}"
         db_initialized = False
@@ -99,6 +105,36 @@ async def health_check():
         },
         "message": "M-Pesa Expense Tracker Backend is running (PesaDB)"
     }
+
+@api_router.post("/initialize-database")
+async def manual_database_initialization():
+    """Manually trigger database initialization - useful for debugging"""
+    logger.info("📝 Manual database initialization requested...")
+    try:
+        result = await db_initializer.initialize_database(
+            seed_categories=True,
+            create_default_user=True
+        )
+
+        return {
+            "success": result['success'],
+            "message": result['message'],
+            "details": {
+                "tables_created": result['tables_created'],
+                "tables_skipped": result['tables_skipped'],
+                "categories_seeded": result['categories_seeded'],
+                "user_created": result.get('user_created', False),
+                "verified": result['verified'],
+                "errors": result.get('errors', [])
+            }
+        }
+    except Exception as e:
+        logger.error(f"❌ Manual database initialization failed: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"Initialization failed: {str(e)}",
+            "details": {}
+        }
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -138,18 +174,33 @@ async def startup_db_initialization():
     """Initialize database on startup"""
     logger.info("🚀 Server starting up - checking database...")
     try:
-        result = await db_initializer.initialize_database(seed_categories=True)
+        # Initialize database with default user creation
+        result = await db_initializer.initialize_database(
+            seed_categories=True,
+            create_default_user=True
+        )
 
         if result['success']:
-            logger.info(f"✅ Database ready: {result['tables_created']} tables created, "
-                       f"{result['tables_skipped']} existed, "
-                       f"{result['categories_seeded']} categories seeded")
+            logger.info(
+                f"✅ Database ready: "
+                f"{result['tables_created']} tables created, "
+                f"{result['tables_skipped']} existed, "
+                f"{result['categories_seeded']} categories seeded, "
+                f"Default user {'created' if result.get('user_created') else 'already exists'}"
+            )
+            if result.get('user_created'):
+                logger.warning("⚠️  Default user created with PIN '0000' - please change during first login")
         else:
-            logger.warning(f"⚠️  Database initialization had issues: {result['message']}")
-            logger.warning("The server will continue, but some features may not work properly")
+            logger.error(f"❌ Database initialization failed: {result['message']}")
+            if result.get('errors'):
+                for error in result['errors']:
+                    logger.error(f"  - {error}")
+            logger.warning("⚠️  The server will continue, but some features may not work properly")
+            logger.warning("⚠️  Try restarting the server or check database credentials")
     except Exception as e:
-        logger.error(f"❌ Database initialization failed: {str(e)}")
+        logger.error(f"❌ Database initialization failed with exception: {str(e)}", exc_info=True)
         logger.warning("The server will continue, but database operations may fail")
+        logger.warning("Please check your PESADB_API_KEY environment variable")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
