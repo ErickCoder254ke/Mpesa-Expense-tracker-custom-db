@@ -188,21 +188,20 @@ async def import_sms_messages(
                 parsing_errors += 1
                 errors.append(f"Error processing message: {str(e)}")
         
-        # Log import session
+        # Log import session - field names must match database schema
         import_log = {
             "id": import_session_id,
             "import_session_id": import_session_id,
             "user_id": user_id,
-            "messages_processed": len(import_request.messages),
-            "transactions_created": transactions_created,  # Will be JSON stringified by db_service
+            "total_messages": len(import_request.messages),  # Changed from messages_processed
+            "successful_imports": successful_imports,  # Provide explicit value
             "duplicates_found": duplicates_found,
             "parsing_errors": parsing_errors,
+            "transactions_created": transactions_created,  # Will be JSON stringified by db_service
             "errors": errors,  # Will be JSON stringified by db_service
-            "completed_at": datetime.utcnow().isoformat(),
-            "auto_categorize": import_request.auto_categorize,
-            "require_review": import_request.require_review
+            "created_at": datetime.utcnow().isoformat()  # Changed from completed_at
         }
-        
+
         await db_service.create_sms_import_log(import_log)
         
         return {

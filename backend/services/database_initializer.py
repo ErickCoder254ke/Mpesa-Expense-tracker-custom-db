@@ -54,6 +54,7 @@ class DatabaseInitializer:
                 """
             ),
             # Categories table
+            # Foreign Keys: user_id -> users.id (optional for default categories)
             (
                 "categories",
                 """
@@ -69,13 +70,14 @@ class DatabaseInitializer:
                 """
             ),
             # Transactions table
+            # Foreign Keys: user_id -> users.id, category_id -> categories.id, parent_transaction_id -> transactions.id
             (
                 "transactions",
                 """
                 CREATE TABLE transactions (
                     id STRING PRIMARY KEY,
                     user_id STRING,
-                    amount REAL,
+                    amount FLOAT,
                     type STRING,
                     category_id STRING,
                     description STRING,
@@ -91,6 +93,7 @@ class DatabaseInitializer:
                 """
             ),
             # Budgets table
+            # Foreign Keys: user_id -> users.id, category_id -> categories.id
             (
                 "budgets",
                 """
@@ -98,7 +101,7 @@ class DatabaseInitializer:
                     id STRING PRIMARY KEY,
                     user_id STRING,
                     category_id STRING,
-                    amount REAL,
+                    amount FLOAT,
                     period STRING,
                     month INT,
                     year INT,
@@ -107,6 +110,7 @@ class DatabaseInitializer:
                 """
             ),
             # SMS Import Logs table
+            # Foreign Keys: user_id -> users.id
             (
                 "sms_import_logs",
                 """
@@ -125,6 +129,7 @@ class DatabaseInitializer:
                 """
             ),
             # Duplicate Logs table
+            # Foreign Keys: user_id -> users.id, original_transaction_id -> transactions.id, duplicate_transaction_id -> transactions.id
             (
                 "duplicate_logs",
                 """
@@ -136,7 +141,7 @@ class DatabaseInitializer:
                     message_hash STRING,
                     mpesa_transaction_id STRING,
                     reason STRING,
-                    similarity_score REAL,
+                    similarity_score FLOAT,
                     detected_at STRING
                 )
                 """

@@ -18,24 +18,36 @@ load_dotenv()
 # PesaDB Configuration
 class PesaDBConfig:
     """Configuration class for PesaDB connection"""
-    
+
     def __init__(self):
         self.api_url = os.environ.get('PESADB_API_URL', 'https://pesacoredb-backend.onrender.com/api')
         self.api_key = os.environ.get('PESADB_API_KEY')
         self.database = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
-        
+        self._validated = False
+
+    def validate(self):
+        """Validate configuration - call this before first use"""
+        if self._validated:
+            return
+
         if not self.api_key:
-            raise ValueError("PESADB_API_KEY environment variable is required")
-    
+            raise ValueError(
+                "PESADB_API_KEY environment variable is required. "
+                "Please set it in your .env file or environment variables."
+            )
+
+        self._validated = True
+
     def get_headers(self) -> Dict[str, str]:
         """Get headers for PesaDB API requests"""
+        self.validate()  # Ensure config is validated before use
         return {
             'Content-Type': 'application/json',
             'X-API-Key': self.api_key
         }
 
 
-# Global config instance
+# Global config instance (does not validate until first use)
 config = PesaDBConfig()
 
 
@@ -59,20 +71,23 @@ class PesaDBClient:
     async def query(self, sql: str, database: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Execute a SQL query on PesaDB
-        
+
         Args:
             sql: SQL query string
             database: Optional database name (defaults to config database)
-        
+
         Returns:
             List of result rows as dictionaries
-        
+
         Raises:
             Exception: If query fails
         """
+        # Validate config before making requests
+        self.config.validate()
+
         if not self.session:
             self.session = aiohttp.ClientSession()
-        
+
         db = database or self.config.database
         url = f"{self.config.api_url}/query"
         
