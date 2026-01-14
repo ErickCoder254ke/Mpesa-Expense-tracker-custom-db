@@ -1,7 +1,9 @@
 -- PesaDB Database Initialization Script
 -- This script creates all tables required for the M-Pesa Expense Tracker application
+-- Updated with IF NOT EXISTS for idempotent initialization
 
 -- Drop existing tables if they exist (for clean re-initialization)
+-- Note: These are skipped during automatic initialization
 DROP TABLE IF EXISTS duplicate_logs;
 DROP TABLE IF EXISTS sms_import_logs;
 DROP TABLE IF EXISTS budgets;
@@ -11,7 +13,7 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS status_checks;
 
 -- Users Table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id STRING PRIMARY KEY,
     pin_hash STRING NOT NULL,
     security_question STRING,
@@ -21,7 +23,7 @@ CREATE TABLE users (
 );
 
 -- Categories Table
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
     id STRING PRIMARY KEY,
     user_id STRING,
     name STRING NOT NULL,
@@ -32,7 +34,7 @@ CREATE TABLE categories (
 );
 
 -- Transactions Table
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
     amount REAL NOT NULL,
@@ -50,7 +52,7 @@ CREATE TABLE transactions (
 );
 
 -- Budgets Table
-CREATE TABLE budgets (
+CREATE TABLE IF NOT EXISTS budgets (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
     category_id STRING NOT NULL,
@@ -62,7 +64,7 @@ CREATE TABLE budgets (
 );
 
 -- SMS Import Logs Table
-CREATE TABLE sms_import_logs (
+CREATE TABLE IF NOT EXISTS sms_import_logs (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
     import_session_id STRING NOT NULL,
@@ -76,7 +78,7 @@ CREATE TABLE sms_import_logs (
 );
 
 -- Duplicate Logs Table
-CREATE TABLE duplicate_logs (
+CREATE TABLE IF NOT EXISTS duplicate_logs (
     id STRING PRIMARY KEY,
     user_id STRING NOT NULL,
     original_transaction_id STRING,
@@ -89,7 +91,7 @@ CREATE TABLE duplicate_logs (
 );
 
 -- Status Checks Table (for health monitoring)
-CREATE TABLE status_checks (
+CREATE TABLE IF NOT EXISTS status_checks (
     id STRING PRIMARY KEY,
     status STRING NOT NULL,
     timestamp STRING NOT NULL,
@@ -101,33 +103,33 @@ CREATE TABLE status_checks (
 -- Adjust as needed based on PesaDB's actual index support
 
 -- User lookups are rare (single user app), but index for safety
--- CREATE INDEX idx_users_id ON users(id);
+-- CREATE INDEX IF NOT EXISTS idx_users_id ON users(id);
 
 -- Category lookups by user
--- CREATE INDEX idx_categories_user_id ON categories(user_id);
--- CREATE INDEX idx_categories_name ON categories(name);
+-- CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
+-- CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name);
 
 -- Transaction indexes (most critical for performance)
--- CREATE INDEX idx_transactions_user_id ON transactions(user_id);
--- CREATE INDEX idx_transactions_category_id ON transactions(category_id);
--- CREATE INDEX idx_transactions_date ON transactions(date);
--- CREATE INDEX idx_transactions_type ON transactions(type);
--- CREATE INDEX idx_transactions_created_at ON transactions(created_at);
--- CREATE INDEX idx_transactions_message_hash ON transactions((sms_metadata->>'original_message_hash'));
+-- CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+-- CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
+-- CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
+-- CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+-- CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
+-- CREATE INDEX IF NOT EXISTS idx_transactions_message_hash ON transactions((sms_metadata->>'original_message_hash'));
 
 -- Budget indexes
--- CREATE INDEX idx_budgets_user_id ON budgets(user_id);
--- CREATE INDEX idx_budgets_category_id ON budgets(category_id);
--- CREATE INDEX idx_budgets_month_year ON budgets(month, year);
+-- CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON budgets(user_id);
+-- CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
+-- CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year);
 
 -- SMS import logs
--- CREATE INDEX idx_sms_import_logs_user_id ON sms_import_logs(user_id);
--- CREATE INDEX idx_sms_import_logs_session_id ON sms_import_logs(import_session_id);
+-- CREATE INDEX IF NOT EXISTS idx_sms_import_logs_user_id ON sms_import_logs(user_id);
+-- CREATE INDEX IF NOT EXISTS idx_sms_import_logs_session_id ON sms_import_logs(import_session_id);
 
 -- Duplicate logs
--- CREATE INDEX idx_duplicate_logs_user_id ON duplicate_logs(user_id);
--- CREATE INDEX idx_duplicate_logs_message_hash ON duplicate_logs(message_hash);
--- CREATE INDEX idx_duplicate_logs_mpesa_transaction_id ON duplicate_logs(mpesa_transaction_id);
+-- CREATE INDEX IF NOT EXISTS idx_duplicate_logs_user_id ON duplicate_logs(user_id);
+-- CREATE INDEX IF NOT EXISTS idx_duplicate_logs_message_hash ON duplicate_logs(message_hash);
+-- CREATE INDEX IF NOT EXISTS idx_duplicate_logs_mpesa_transaction_id ON duplicate_logs(mpesa_transaction_id);
 
 -- Insert default categories (same as in the original MongoDB setup)
 -- These will be created during setup-pin flow, but we can pre-seed them here
