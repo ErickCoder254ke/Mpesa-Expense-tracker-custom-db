@@ -450,7 +450,8 @@ class DatabaseInitializer:
                     'table exists',
                     'duplicate',
                     'exist'
-                ]):\n                    logger.info(f"✅ Table '{table_name}' already exists (detected from error)")
+                ]):
+                    logger.info(f"✅ Table '{table_name}' already exists (detected from error)")
                     tables_skipped += 1
                 else:
                     error_msg = f"Error creating table '{table_name}': {str(e)}"
