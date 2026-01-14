@@ -7,7 +7,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: MONGO_URL
-        sync: false
-      - key: DB_NAME
+      - key: PESADB_API_URL
+        value: https://pesacoredb-backend.onrender.com/api
+      - key: PESADB_API_KEY
+        sync: false  # Set this in Render dashboard as a secret
+      - key: PESADB_DATABASE
         value: mpesa_tracker

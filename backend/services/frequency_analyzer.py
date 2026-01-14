@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from services.pesadb_service import db_service
 from models.transaction import Transaction
 from models.user import Category
 from datetime import datetime, timedelta
@@ -26,9 +26,6 @@ class FrequentTransaction:
 class TransactionFrequencyAnalyzer:
     """Analyzes transaction patterns to identify frequently occurring transactions"""
     
-    def __init__(self, db: AsyncIOMotorDatabase):
-        self.db = db
-        
     async def analyze_frequent_transactions(
         self, 
         user_id: str, 
@@ -51,21 +48,25 @@ class TransactionFrequencyAnalyzer:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days_back)
         
-        # Get transactions for analysis
-        transactions_docs = await self.db.transactions.find({
-            "user_id": user_id,
-            "date": {"$gte": start_date, "$lte": end_date}
-        }).to_list(1000)
+        # Get transactions for analysis using PesaDBService
+        transactions_data = await db_service.get_transactions(
+            user_id=user_id,
+            start_date=start_date.isoformat(),
+            end_date=end_date.isoformat(),
+            limit=1000
+        )
         
-        if not transactions_docs:
+        if not transactions_data:
             return []
         
         # Convert to Transaction objects
         transactions = []
-        for doc in transactions_docs:
-            doc["id"] = str(doc["_id"])
-            del doc["_id"]
-            transactions.append(Transaction(**doc))
+        for txn_data in transactions_data:
+            # Parse date string to datetime
+            if isinstance(txn_data.get('date'), str):
+                txn_data['date'] = datetime.fromisoformat(txn_data['date'].replace('Z', '+00:00'))
+            
+            transactions.append(Transaction(**txn_data))
         
         # Group transactions by similarity patterns
         patterns = self._group_by_similarity(transactions)
@@ -153,12 +154,12 @@ class TransactionFrequencyAnalyzer:
         most_common_category = max(category_counts.items(), key=lambda x: x[1]) if category_counts else (None, 0)
         category_id = most_common_category[0] if most_common_category[1] > count * 0.5 else None
         
-        # Get category name
+        # Get category name using PesaDBService
         category_name = None
         if category_id:
-            category_doc = await self.db.categories.find_one({"_id": category_id})
-            if category_doc:
-                category_name = category_doc["name"]
+            category_data = await db_service.get_category_by_id(category_id)
+            if category_data:
+                category_name = category_data["name"]
         
         # Calculate confidence score
         confidence_score = self._calculate_confidence(transactions, pattern)
@@ -210,9 +211,9 @@ class TransactionFrequencyAnalyzer:
     
     async def _suggest_category(self, pattern: str, transactions: List[Transaction]) -> Optional[str]:
         """Suggest a category for the transaction pattern"""
-        # Get all categories
-        categories_docs = await self.db.categories.find().to_list(100)
-        categories = [Category(**{**doc, "id": str(doc["_id"])}) for doc in categories_docs]
+        # Get all categories using PesaDBService
+        categories_data = await db_service.get_categories(limit=100)
+        categories = [Category(**{**cat, "id": cat.get("id")}) for cat in categories_data]
         
         # Use the categorization service logic
         from services.categorization import CategorizationService
@@ -221,9 +222,9 @@ class TransactionFrequencyAnalyzer:
         suggested_category_id = CategorizationService.auto_categorize(pattern, categories)
         
         if suggested_category_id:
-            category_doc = await self.db.categories.find_one({"_id": suggested_category_id})
-            if category_doc:
-                return category_doc["name"]
+            category_data = await db_service.get_category_by_id(suggested_category_id)
+            if category_data:
+                return category_data["name"]
         
         return None
     
@@ -254,21 +255,17 @@ class TransactionFrequencyAnalyzer:
         transaction_ids: List[str]
     ) -> int:
         """Apply a category to all transactions matching a pattern"""
-        # Update all transactions with the new category
-        result = await self.db.transactions.update_many(
-            {
-                "_id": {"$in": transaction_ids},
-                "user_id": user_id
+        # Update all transactions with the new category using PesaDBService
+        success = await db_service.update_many_transactions(
+            transaction_ids=transaction_ids,
+            update_data={
+                "category_id": category_id,
+                "updated_at": datetime.utcnow().isoformat()
             },
-            {
-                "$set": {
-                    "category_id": category_id,
-                    "updated_at": datetime.utcnow()
-                }
-            }
+            user_id=user_id
         )
         
-        return result.modified_count
+        return len(transaction_ids) if success else 0
     
     async def mark_pattern_as_reviewed(
         self, 
@@ -277,18 +274,14 @@ class TransactionFrequencyAnalyzer:
         transaction_ids: List[str]
     ) -> int:
         """Mark a pattern as reviewed to avoid future prompts"""
-        # Add metadata to mark as reviewed
-        result = await self.db.transactions.update_many(
-            {
-                "_id": {"$in": transaction_ids},
-                "user_id": user_id
+        # Add metadata to mark as reviewed using PesaDBService
+        success = await db_service.update_many_transactions(
+            transaction_ids=transaction_ids,
+            update_data={
+                "pattern_reviewed": True,
+                "pattern_reviewed_at": datetime.utcnow().isoformat()
             },
-            {
-                "$set": {
-                    "pattern_reviewed": True,
-                    "pattern_reviewed_at": datetime.utcnow()
-                }
-            }
+            user_id=user_id
         )
         
-        return result.modified_count
+        return len(transaction_ids) if success else 0

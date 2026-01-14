@@ -1,12 +1,12 @@
 from typing import List, Dict, Optional, Tuple
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from services.pesadb_service import db_service
+from config.pesadb import query_db
 from models.budget import Budget
 from models.transaction import Transaction
 from models.user import Category
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from enum import Enum
-from bson import ObjectId
 import calendar
 
 class AlertSeverity(Enum):
@@ -66,10 +66,7 @@ class BudgetGoal:
     potential_impact: str
 
 class BudgetMonitoringService:
-    """Comprehensive budget monitoring and intelligence service"""
-    
-    def __init__(self, db: AsyncIOMotorDatabase):
-        self.db = db
+    """Comprehensive budget monitoring and intelligence service - Migrated to PesaDB"""
     
     async def get_comprehensive_budget_analysis(
         self, 
@@ -126,26 +123,25 @@ class BudgetMonitoringService:
         end_date = datetime(year, month, last_day, 23, 59, 59)
         current_day = datetime.now().day if datetime.now().month == month and datetime.now().year == year else last_day
         
-        # Get budgets
-        budgets_docs = await self.db.budgets.find({
-            "user_id": user_id,
-            "month": month,
-            "year": year
-        }).to_list(100)
+        # Get budgets using PesaDBService
+        budgets_data = await db_service.get_budgets(
+            user_id=user_id,
+            month=month,
+            year=year,
+            limit=100
+        )
         
         budgets_with_spending = []
         
-        for budget_doc in budgets_docs:
-            budget = Budget(**{**budget_doc, "id": str(budget_doc["_id"])})
+        for budget_data in budgets_data:
+            budget = Budget(**budget_data)
             
-            # Get category info
-            category_doc = await self.db.categories.find_one({
-                "_id": ObjectId(budget.category_id) if ObjectId.is_valid(budget.category_id) else budget.category_id
-            })
-            if not category_doc:
+            # Get category info using PesaDBService
+            category_data = await db_service.get_category_by_id(budget.category_id)
+            if not category_data:
                 continue
             
-            category = Category(**{**category_doc, "id": str(category_doc["_id"])})
+            category = Category(**{**category_data, "id": category_data.get("id")})
             
             # Get spending details
             spending_data = await self._get_detailed_spending(
@@ -169,95 +165,112 @@ class BudgetMonitoringService:
         current_day: int,
         total_days: int
     ) -> Dict:
-        """Get detailed spending analysis for a category"""
+        """Get detailed spending analysis for a category using SQL queries"""
         
-        # Overall spending
-        total_pipeline = [
-            {
-                "$match": {
-                    "user_id": user_id,
-                    "category_id": category_id,
-                    "type": "expense",
-                    "date": {"$gte": start_date, "$lte": end_date}
-                }
-            },
-            {
-                "$group": {
-                    "_id": None,
-                    "total_spent": {"$sum": "$amount"},
-                    "transaction_count": {"$sum": 1},
-                    "avg_transaction": {"$avg": "$amount"},
-                    "max_transaction": {"$max": "$amount"},
-                    "min_transaction": {"$min": "$amount"}
-                }
-            }
-        ]
+        start_str = start_date.isoformat()
+        end_str = end_date.isoformat()
         
-        total_result = await self.db.transactions.aggregate(total_pipeline).to_list(1)
+        # Overall spending aggregation using SQL
+        total_query = f"""
+        SELECT 
+            SUM(amount) as total_spent,
+            COUNT(*) as transaction_count,
+            AVG(amount) as avg_transaction,
+            MAX(amount) as max_transaction,
+            MIN(amount) as min_transaction
+        FROM transactions
+        WHERE user_id = '{user_id}'
+        AND category_id = '{category_id}'
+        AND type = 'expense'
+        AND date >= '{start_str}'
+        AND date <= '{end_str}'
+        """
+        
+        total_result = await query_db(total_query)
         total_data = total_result[0] if total_result else {
             "total_spent": 0, "transaction_count": 0, "avg_transaction": 0,
             "max_transaction": 0, "min_transaction": 0
         }
         
-        # Daily spending pattern
-        daily_pipeline = [
-            {
-                "$match": {
-                    "user_id": user_id,
-                    "category_id": category_id,
-                    "type": "expense",
-                    "date": {"$gte": start_date, "$lte": end_date}
-                }
-            },
-            {
-                "$group": {
-                    "_id": {"$dayOfMonth": "$date"},
-                    "daily_amount": {"$sum": "$amount"},
-                    "daily_count": {"$sum": 1}
-                }
-            },
-            {"$sort": {"_id": 1}}
+        # Convert None to 0 for numeric fields
+        total_spent = float(total_data.get("total_spent") or 0)
+        transaction_count = int(total_data.get("transaction_count") or 0)
+        avg_transaction = float(total_data.get("avg_transaction") or 0)
+        max_transaction = float(total_data.get("max_transaction") or 0)
+        min_transaction = float(total_data.get("min_transaction") or 0)
+        
+        # Daily spending pattern using SQL GROUP BY
+        # Extract day from date (SQL syntax may vary by database)
+        daily_query = f"""
+        SELECT 
+            date,
+            SUM(amount) as daily_amount,
+            COUNT(*) as daily_count
+        FROM transactions
+        WHERE user_id = '{user_id}'
+        AND category_id = '{category_id}'
+        AND type = 'expense'
+        AND date >= '{start_str}'
+        AND date <= '{end_str}'
+        GROUP BY date
+        ORDER BY date ASC
+        """
+        
+        daily_result = await query_db(daily_query)
+        
+        # Process daily results to extract day of month
+        daily_pattern = []
+        for row in daily_result:
+            date_val = row.get('date')
+            # Parse date string to get day
+            if isinstance(date_val, str):
+                try:
+                    date_obj = datetime.fromisoformat(date_val.replace('Z', '+00:00'))
+                    day_of_month = date_obj.day
+                except:
+                    day_of_month = 1
+            else:
+                day_of_month = 1
+            
+            daily_pattern.append({
+                "_id": day_of_month,
+                "daily_amount": float(row.get("daily_amount") or 0),
+                "daily_count": int(row.get("daily_count") or 0)
+            })
+        
+        # Weekly spending (simplified - group by week ranges)
+        # Since SQL date functions vary, we'll calculate weeks in Python
+        weekly_totals = defaultdict(lambda: {"weekly_amount": 0, "weekly_count": 0})
+        for row in daily_result:
+            date_val = row.get('date')
+            if isinstance(date_val, str):
+                try:
+                    date_obj = datetime.fromisoformat(date_val.replace('Z', '+00:00'))
+                    week_num = (date_obj.day - 1) // 7 + 1  # Week 1-5 of month
+                    weekly_totals[week_num]["weekly_amount"] += float(row.get("daily_amount") or 0)
+                    weekly_totals[week_num]["weekly_count"] += int(row.get("daily_count") or 0)
+                except:
+                    pass
+        
+        weekly_pattern = [
+            {"_id": week, **data} 
+            for week, data in sorted(weekly_totals.items())
         ]
-        
-        daily_result = await self.db.transactions.aggregate(daily_pipeline).to_list(31)
-        
-        # Weekly spending
-        weekly_pipeline = [
-            {
-                "$match": {
-                    "user_id": user_id,
-                    "category_id": category_id,
-                    "type": "expense",
-                    "date": {"$gte": start_date, "$lte": end_date}
-                }
-            },
-            {
-                "$group": {
-                    "_id": {"$week": "$date"},
-                    "weekly_amount": {"$sum": "$amount"},
-                    "weekly_count": {"$sum": 1}
-                }
-            }
-        ]
-        
-        weekly_result = await self.db.transactions.aggregate(weekly_pipeline).to_list(5)
-        
-        total_spent = total_data["total_spent"]
         
         return {
             "total_spent": total_spent,
-            "transaction_count": total_data["transaction_count"],
-            "avg_transaction": total_data["avg_transaction"],
-            "max_transaction": total_data["max_transaction"],
-            "min_transaction": total_data["min_transaction"],
+            "transaction_count": transaction_count,
+            "avg_transaction": avg_transaction,
+            "max_transaction": max_transaction,
+            "min_transaction": min_transaction,
             "daily_average": total_spent / current_day if current_day > 0 else 0,
-            "monthly_average": total_spent / total_days * 30,
+            "monthly_average": total_spent / total_days * 30 if total_days > 0 else 0,
             "projected_spending": (total_spent / current_day) * total_days if current_day > 0 else total_spent,
             "spending_velocity": total_spent / current_day if current_day > 0 else 0,
-            "daily_pattern": daily_result,
-            "weekly_pattern": weekly_result,
-            "days_with_spending": len(daily_result),
-            "spending_frequency": len(daily_result) / total_days if total_days > 0 else 0
+            "daily_pattern": daily_pattern,
+            "weekly_pattern": weekly_pattern,
+            "days_with_spending": len(daily_pattern),
+            "spending_frequency": len(daily_pattern) / total_days if total_days > 0 else 0
         }
     
     async def _generate_comprehensive_alerts(
@@ -414,11 +427,11 @@ class BudgetMonitoringService:
         month: int, 
         year: int
     ) -> SpendingTrend:
-        """Calculate spending trend for a specific category"""
+        """Calculate spending trend for a specific category using SQL"""
         
         # Get last 3 months of data
         current_month_start = datetime(year, month, 1)
-        months_back = []
+        months_data = []
         
         for i in range(3):
             if month - i <= 0:
@@ -431,30 +444,23 @@ class BudgetMonitoringService:
             month_start = datetime(prev_year, prev_month, 1)
             _, last_day = calendar.monthrange(prev_year, prev_month)
             month_end = datetime(prev_year, prev_month, last_day, 23, 59, 59)
-            months_back.append((month_start, month_end))
+            months_data.append((month_start.isoformat(), month_end.isoformat()))
         
-        # Get spending for each month
+        # Get spending for each month using SQL
         monthly_spending = []
-        for start_date, end_date in months_back:
-            spending_pipeline = [
-                {
-                    "$match": {
-                        "user_id": user_id,
-                        "category_id": category_id,
-                        "type": "expense",
-                        "date": {"$gte": start_date, "$lte": end_date}
-                    }
-                },
-                {
-                    "$group": {
-                        "_id": None,
-                        "total": {"$sum": "$amount"}
-                    }
-                }
-            ]
+        for start_date, end_date in months_data:
+            spending_query = f"""
+            SELECT SUM(amount) as total
+            FROM transactions
+            WHERE user_id = '{user_id}'
+            AND category_id = '{category_id}'
+            AND type = 'expense'
+            AND date >= '{start_date}'
+            AND date <= '{end_date}'
+            """
             
-            result = await self.db.transactions.aggregate(spending_pipeline).to_list(1)
-            spending = result[0]["total"] if result else 0
+            result = await query_db(spending_query)
+            spending = float(result[0]["total"] or 0) if result and result[0].get("total") else 0
             monthly_spending.append(spending)
         
         # Calculate trend
@@ -479,8 +485,8 @@ class BudgetMonitoringService:
             
             # Calculate confidence based on data consistency
             if len(monthly_spending) >= 3:
-                variance = sum((x - sum(monthly_spending)/len(monthly_spending))**2 for x in monthly_spending) / len(monthly_spending)
                 avg_spending = sum(monthly_spending) / len(monthly_spending)
+                variance = sum((x - avg_spending)**2 for x in monthly_spending) / len(monthly_spending)
                 confidence = 1.0 / (1.0 + variance / (avg_spending**2)) if avg_spending > 0 else 0.5
             else:
                 confidence = 0.7
@@ -522,7 +528,8 @@ class BudgetMonitoringService:
                 spent = budget_data["total_spent"]
                 
                 budget_percentage = (budget.amount / total_budget) * 100
-                spending_percentage = (spent / sum(b["total_spent"] for b in budgets)) * 100 if sum(b["total_spent"] for b in budgets) > 0 else 0
+                total_spent_all = sum(b["total_spent"] for b in budgets)
+                spending_percentage = (spent / total_spent_all) * 100 if total_spent_all > 0 else 0
                 
                 # Over-allocated categories
                 if budget_percentage > spending_percentage + 15:
@@ -801,3 +808,7 @@ class BudgetMonitoringService:
                 "stable_trends": 0
             }
         }
+
+
+# Import defaultdict for weekly totals
+from collections import defaultdict
