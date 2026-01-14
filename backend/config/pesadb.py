@@ -191,10 +191,12 @@ def escape_string(value: Any) -> str:
         return f"'{value.isoformat()}'"
     
     if isinstance(value, dict):
-        return f"'{json.dumps(value).replace(\"'\", \"''\")}'"
-    
+        json_str = json.dumps(value).replace("'", "''")
+        return f"'{json_str}'"
+
     if isinstance(value, list):
-        return f"'{json.dumps(value).replace(\"'\", \"''\")}'"
+        json_str = json.dumps(value).replace("'", "''")
+        return f"'{json_str}'"
     
     # String escaping - replace single quotes with double single quotes
     str_value = str(value).replace("'", "''")

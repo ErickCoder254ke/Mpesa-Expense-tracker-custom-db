@@ -9,7 +9,7 @@ import json
 import hashlib
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta
-from ..config.pesadb import query_db, execute_db, escape_string, build_insert, build_update, build_delete
+from config.pesadb import query_db, execute_db, escape_string, build_insert, build_update, build_delete
 
 
 class PesaDBService:

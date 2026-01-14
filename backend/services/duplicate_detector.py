@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-from .pesadb_service import db_service
+from services.pesadb_service import db_service
 import hashlib
 
 class DuplicateDetector:
@@ -212,7 +212,7 @@ class DuplicateDetector:
         duplicates_blocked = await db_service.count_duplicate_logs(user_id)
         
         # Count SMS transactions processed
-        from ..config.pesadb import query_db
+        from config.pesadb import query_db
         sms_result = await query_db(f"""
         SELECT COUNT(*) as count FROM transactions
         WHERE user_id = '{user_id}'
