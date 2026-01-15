@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "metro": "^0.76.7",
+    "metro-config": "^0.76.7",
+    "metro-transform-worker": "^0.76.7"
+  }
+}
