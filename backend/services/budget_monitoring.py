@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Tuple
 from services.pesadb_service import db_service
 from config.pesadb import query_db
+from config.pesadb_fallbacks import aggregate_safe
 from models.budget import Budget
 from models.transaction import Transaction
 from models.user import Category
@@ -170,33 +171,35 @@ class BudgetMonitoringService:
         start_str = start_date.isoformat()
         end_str = end_date.isoformat()
         
-        # Overall spending aggregation using SQL
-        total_query = f"""
-        SELECT
-            SUM(amount) as total_spent,
-            COUNT(*) as transaction_count,
-            AVG(amount) as avg_transaction,
-            MAX(amount) as max_transaction,
-            MIN(amount) as min_transaction
-        FROM transactions
-        WHERE user_id = '{user_id}'
-          AND category_id = '{category_id}'
-          AND type = 'expense'
-          AND date BETWEEN '{start_str}' AND '{end_str}'
-        """
-        
-        total_result = await query_db(total_query)
-        total_data = total_result[0] if total_result else {
-            "total_spent": 0, "transaction_count": 0, "avg_transaction": 0,
-            "max_transaction": 0, "min_transaction": 0
-        }
-        
-        # Convert None to 0 for numeric fields
-        total_spent = float(total_data.get("total_spent") or 0)
-        transaction_count = int(total_data.get("transaction_count") or 0)
-        avg_transaction = float(total_data.get("avg_transaction") or 0)
-        max_transaction = float(total_data.get("max_transaction") or 0)
-        min_transaction = float(total_data.get("min_transaction") or 0)
+        # Overall spending aggregation using SQL with fallback support
+        where = f"user_id = '{user_id}' AND category_id = '{category_id}' AND type = 'expense' AND date BETWEEN '{start_str}' AND '{end_str}'"
+
+        total_result = await aggregate_safe(
+            'transactions',
+            [
+                ('SUM', 'amount'),
+                ('COUNT', '*'),
+                ('AVG', 'amount'),
+                ('MAX', 'amount'),
+                ('MIN', 'amount')
+            ],
+            where=where,
+            query_func=query_db
+        )
+
+        if total_result and len(total_result) > 0:
+            row = total_result[0]
+            total_spent = float(row.get('sum_amount') or 0)
+            transaction_count = int(row.get('count_all') or 0)
+            avg_transaction = float(row.get('avg_amount') or 0)
+            max_transaction = float(row.get('max_amount') or 0)
+            min_transaction = float(row.get('min_amount') or 0)
+        else:
+            total_spent = 0
+            transaction_count = 0
+            avg_transaction = 0
+            max_transaction = 0
+            min_transaction = 0
         
         # Daily spending pattern using SQL GROUP BY
         # Extract day from date (SQL syntax may vary by database)

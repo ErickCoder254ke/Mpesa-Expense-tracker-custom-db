@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import List, Tuple, Dict
 from config.pesadb import query_db, execute_db, create_database, database_exists
+from config.pesadb_fallbacks import count_rows_safe
 
 logger = logging.getLogger(__name__)
 
@@ -473,10 +474,10 @@ class DatabaseInitializer:
             Number of categories seeded
         """
         try:
-            # Check if categories already exist
-            categories_count = await query_db("SELECT COUNT(*) as count FROM categories")
-            if categories_count and categories_count[0]['count'] > 0:
-                logger.info(f"✅ Categories already seeded ({categories_count[0]['count']} exist)")
+            # Check if categories already exist using fallback-safe count
+            categories_count = await count_rows_safe('categories', query_func=query_db)
+            if categories_count > 0:
+                logger.info(f"✅ Categories already seeded ({categories_count} exist)")
                 return 0
 
             logger.warning("⚠️  No categories found - this should have been handled by SQL file")

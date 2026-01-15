@@ -14,7 +14,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # PesaDB configuration (replaces MongoDB)
-from config.pesadb import get_client
+from config.pesadb import get_client, query_db
+from config.pesadb_fallbacks import detect_pesadb_capabilities
 from services.pesadb_service import db_service
 from services.database_initializer import db_initializer
 
@@ -201,6 +202,26 @@ async def startup_db_initialization():
         logger.error(f"❌ Database initialization failed with exception: {str(e)}", exc_info=True)
         logger.warning("The server will continue, but database operations may fail")
         logger.warning("Please check your PESADB_API_KEY environment variable")
+
+    # Detect database capabilities for aggregate functions
+    try:
+        logger.info("🔍 Detecting database capabilities...")
+        caps = await detect_pesadb_capabilities(query_db)
+
+        if not caps['count']:
+            logger.warning(
+                "⚠️ DATABASE VERSION WARNING: "
+                "Your PesaDB instance does not support COUNT aggregates. "
+                "Application is using memory-based fallbacks (slower performance). "
+                "Please upgrade to PesaDB v2.0.0+ for optimal performance."
+            )
+        else:
+            logger.info("✅ Database supports native aggregates - optimal performance enabled")
+
+        logger.info(f"📊 Database capabilities: {caps}")
+
+    except Exception as e:
+        logger.warning(f"Could not detect database capabilities: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

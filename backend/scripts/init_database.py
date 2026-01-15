@@ -18,6 +18,7 @@ backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from config.pesadb import query_db, execute_db
+from config.pesadb_fallbacks import count_rows_safe
 
 
 async def init_database():
@@ -115,8 +116,7 @@ async def verify_setup():
         tables = ['users', 'categories', 'transactions', 'budgets']
         
         for table in tables:
-            result = await query_db(f"SELECT COUNT(*) as count FROM {table}")
-            count = result[0]['count'] if result else 0
+            count = await count_rows_safe(table, query_func=query_db)
             print(f"✅ Table '{table}' exists with {count} rows")
         
         print("\n✅ Database verification completed successfully!")

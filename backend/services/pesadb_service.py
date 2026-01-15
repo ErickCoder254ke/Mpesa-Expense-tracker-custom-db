@@ -10,6 +10,7 @@ import hashlib
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta
 from config.pesadb import query_db, execute_db, escape_string, build_insert, build_update, build_delete
+from config.pesadb_fallbacks import count_rows_safe, sum_safe, avg_safe, aggregate_safe
 
 
 def is_table_not_found_error(error: Exception) -> bool:
@@ -29,22 +30,10 @@ class PesaDBService:
     async def get_user_count() -> int:
         """Get total number of users"""
         try:
-            result = await query_db("SELECT COUNT(*) as count FROM users")
-            if result and len(result) > 0:
-                # Try different possible key names
-                row = result[0]
-                if 'count' in row:
-                    return int(row['count'])
-                elif 'COUNT(*)' in row:
-                    return int(row['COUNT(*)'])
-                # Fallback: get first numeric value
-                for val in row.values():
-                    if isinstance(val, (int, float)):
-                        return int(val)
-            return 0
+            # Use safe count with automatic fallback
+            return await count_rows_safe('users', query_func=query_db)
         except Exception as e:
             if is_table_not_found_error(e):
-                # Table doesn't exist yet - return 0
                 return 0
             raise
 
@@ -141,17 +130,7 @@ class PesaDBService:
     async def count_categories() -> int:
         """Count total categories"""
         try:
-            result = await query_db("SELECT COUNT(*) as count FROM categories")
-            if result and len(result) > 0:
-                row = result[0]
-                if 'count' in row:
-                    return int(row['count'])
-                elif 'COUNT(*)' in row:
-                    return int(row['COUNT(*)'])
-                for val in row.values():
-                    if isinstance(val, (int, float)):
-                        return int(val)
-            return 0
+            return await count_rows_safe('categories', query_func=query_db)
         except Exception as e:
             if is_table_not_found_error(e):
                 return 0
@@ -275,17 +254,12 @@ class PesaDBService:
         if category_id:
             where_clause += f" AND category_id = '{category_id}'"
 
-        result = await query_db(f"SELECT COUNT(*) as count FROM transactions WHERE {where_clause}")
-        if result and len(result) > 0:
-            row = result[0]
-            if 'count' in row:
-                return int(row['count'])
-            elif 'COUNT(*)' in row:
-                return int(row['COUNT(*)'])
-            for val in row.values():
-                if isinstance(val, (int, float)):
-                    return int(val)
-        return 0
+        try:
+            return await count_rows_safe('transactions', where_clause, query_func=query_db)
+        except Exception as e:
+            if is_table_not_found_error(e):
+                return 0
+            raise
     
     @staticmethod
     async def get_transaction_by_message_hash(message_hash: str) -> Optional[Dict[str, Any]]:
@@ -497,20 +471,12 @@ class PesaDBService:
     @staticmethod
     async def count_duplicate_logs(user_id: str) -> int:
         """Count duplicate logs for a user"""
-        result = await query_db(f"""
-        SELECT COUNT(*) as count FROM duplicate_logs
-        WHERE user_id = '{user_id}'
-        """)
-        if result and len(result) > 0:
-            row = result[0]
-            if 'count' in row:
-                return int(row['count'])
-            elif 'COUNT(*)' in row:
-                return int(row['COUNT(*)'])
-            for val in row.values():
-                if isinstance(val, (int, float)):
-                    return int(val)
-        return 0
+        try:
+            return await count_rows_safe('duplicate_logs', f"user_id = '{user_id}'", query_func=query_db)
+        except Exception as e:
+            if is_table_not_found_error(e):
+                return 0
+            raise
     
     # ==================== STATUS CHECK OPERATIONS ====================
     
@@ -532,55 +498,35 @@ class PesaDBService:
     @staticmethod
     async def get_spending_by_category(user_id: str, category_id: str, start_date: str, end_date: str) -> float:
         """Get total spending for a category in a date range"""
-        result = await query_db(f"""
-        SELECT SUM(amount) as total
-        FROM transactions
-        WHERE user_id = '{user_id}'
-          AND category_id = '{category_id}'
-          AND type = 'expense'
-          AND date BETWEEN '{start_date}' AND '{end_date}'
-        """)
-        
-        return float(result[0]['total']) if result and result[0].get('total') else 0.0
+        where = f"user_id = '{user_id}' AND category_id = '{category_id}' AND type = 'expense' AND date BETWEEN '{start_date}' AND '{end_date}'"
+        return await sum_safe('transactions', 'amount', where, query_func=query_db)
     
     @staticmethod
     async def get_total_by_type(user_id: str, transaction_type: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> float:
         """Get total amount by transaction type"""
         where_clauses = [f"user_id = '{user_id}'", f"type = '{transaction_type}'"]
-        
+
         if start_date:
             where_clauses.append(f"date >= '{start_date}'")
         if end_date:
             where_clauses.append(f"date <= '{end_date}'")
-        
+
         where_clause = ' AND '.join(where_clauses)
-        
-        result = await query_db(f"""
-        SELECT SUM(amount) as total
-        FROM transactions
-        WHERE {where_clause}
-        """)
-        
-        return float(result[0]['total']) if result and result[0].get('total') else 0.0
+        return await sum_safe('transactions', 'amount', where_clause, query_func=query_db)
     
     @staticmethod
     async def get_category_spending_summary(user_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
         """Get spending summary grouped by category"""
-        result = await query_db(f"""
-        SELECT
-            category_id,
-            SUM(amount) as total,
-            COUNT(*) as transaction_count
-        FROM transactions
-        WHERE user_id = '{user_id}'
-        AND type = 'expense'
-        AND date >= '{start_date}'
-        AND date <= '{end_date}'
-        GROUP BY category_id
-        ORDER BY total DESC
-        """)
-        
-        return result
+        where = f"user_id = '{user_id}' AND type = 'expense' AND date >= '{start_date}' AND date <= '{end_date}'"
+
+        return await aggregate_safe(
+            'transactions',
+            [('SUM', 'amount'), ('COUNT', '*')],
+            where=where,
+            group_by='category_id',
+            order_by='sum_amount DESC',
+            query_func=query_db
+        )
     
     @staticmethod
     async def get_daily_spending(user_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:

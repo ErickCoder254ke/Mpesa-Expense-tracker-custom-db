@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from services.pesadb_service import db_service
+from config.pesadb_fallbacks import count_rows_safe, aggregate_safe
 import hashlib
 
 class DuplicateDetector:
@@ -221,33 +222,29 @@ class DuplicateDetector:
         # Count duplicates blocked
         duplicates_blocked = await db_service.count_duplicate_logs(user_id)
         
-        # Count SMS transactions processed
+        # Count SMS transactions processed using fallback-safe count
         from config.pesadb import query_db
-        sms_result = await query_db(f"""
-        SELECT COUNT(*) as count FROM transactions
-        WHERE user_id = '{user_id}'
-        AND source = 'sms'
-        AND created_at >= '{cutoff_str}'
-        """)
-        sms_transactions = sms_result[0]['count'] if sms_result else 0
-        
-        # Get common duplicate reasons
-        reasons_result = await query_db(f"""
-        SELECT duplicate_reasons, COUNT(*) as count
-        FROM duplicate_logs
-        WHERE user_id = '{user_id}'
-        AND detected_at >= '{cutoff_str}'
-        AND action_taken = 'blocked'
-        GROUP BY duplicate_reasons
-        ORDER BY count DESC
-        LIMIT 10
-        """)
+        where_sms = f"user_id = '{user_id}' AND source = 'sms' AND created_at >= '{cutoff_str}'"
+        sms_transactions = await count_rows_safe('transactions', where_sms, query_func=query_db)
+
+        # Get common duplicate reasons using fallback-safe aggregation
+        where_reasons = f"user_id = '{user_id}' AND detected_at >= '{cutoff_str}' AND action_taken = 'blocked'"
+        reasons_result = await aggregate_safe(
+            'duplicate_logs',
+            [('COUNT', '*')],
+            where=where_reasons,
+            group_by='duplicate_reasons',
+            order_by='count_all DESC',
+            query_func=query_db
+        )
+        # Limit to 10 results manually since LIMIT is in the query part
+        reasons_result = reasons_result[:10] if reasons_result else []
         
         # Parse comma-separated reasons
         duplicate_reasons = []
         for row in reasons_result:
             reasons_str = row.get('duplicate_reasons', '')
-            count = row.get('count', 0)
+            count = row.get('count_all', 0)  # Updated to match aggregate_safe output
             if reasons_str:
                 for reason in reasons_str.split(','):
                     duplicate_reasons.append({"_id": reason.strip(), "count": count})
