@@ -1,0 +1,9 @@
+# Ignore files during Render build to reduce slug size
+*.md
+*.txt
+.git
+.gitignore
+.expo
+node_modules/.cache
+android
+ios

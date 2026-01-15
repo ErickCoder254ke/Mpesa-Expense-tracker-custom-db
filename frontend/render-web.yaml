@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: mpesa-expense-tracker-web
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build:web
+    startCommand: npm run serve:web
+    envVars:
+      - key: NODE_VERSION
+        value: 18.17.0
+      - key: EXPO_PUBLIC_BACKEND_URL
+        sync: false
+        # Set this in Render dashboard to your backend URL
+        # Example: https://your-backend.onrender.com

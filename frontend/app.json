@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "M-Pesa Expense Tracker",
+    "slug": "mpesa-expense-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "backgroundColor": "#0D1B2A",
+      "package": "com.mpesaexpensetracker.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.READ_SMS",
+        "android.permission.RECEIVE_SMS"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "EXPO_PUBLIC_BACKEND_URL": "https://mpesa-expense-tracker-custom-db.onrender.com",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "7dac5e1c-3a09-45f6-b5c0-acaa65b52ab5"
+      }
+    },
+    "scheme": "mpesa-expense-tracker",
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
