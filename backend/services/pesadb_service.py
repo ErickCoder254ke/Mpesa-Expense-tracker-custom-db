@@ -621,17 +621,27 @@ class PesaDBService:
     
     @staticmethod
     async def get_category_spending_summary(user_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
-        """Get spending summary grouped by category"""
-        where = f"user_id = '{user_id}' AND type = 'expense' AND date >= '{start_date}' AND date <= '{end_date}'"
+        """Get spending summary grouped by category with category details in one query"""
+        # Use JOIN to get category details along with aggregates - avoids N+1 queries
+        result = await query_db(f"""
+        SELECT
+            t.category_id,
+            c.name as category_name,
+            c.color as category_color,
+            c.icon as category_icon,
+            SUM(t.amount) as total,
+            COUNT(*) as transaction_count
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        WHERE t.user_id = '{user_id}'
+          AND t.type = 'expense'
+          AND t.date >= '{start_date}'
+          AND t.date <= '{end_date}'
+        GROUP BY t.category_id, c.name, c.color, c.icon
+        ORDER BY total DESC
+        """)
 
-        return await aggregate_safe(
-            'transactions',
-            [('SUM', 'amount'), ('COUNT', '*')],
-            where=where,
-            group_by='category_id',
-            order_by='sum_amount DESC',
-            query_func=query_db
-        )
+        return result
     
     @staticmethod
     async def get_daily_spending(user_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:

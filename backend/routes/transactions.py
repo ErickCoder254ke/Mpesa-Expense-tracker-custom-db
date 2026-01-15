@@ -224,23 +224,21 @@ async def get_analytics_summary(
             user_id, 'expense', start_date_str, end_date_str
         )
 
-        # Get category spending summary
+        # Get category spending summary (now includes category details via JOIN)
         categories_summary = await db_service.get_category_spending_summary(
             user_id, start_date_str, end_date_str
         )
-        
-        # Build categories_by_category dict
+
+        # Build categories_by_category dict (no additional queries needed!)
         categories_by_category = {}
         for cat_summary in categories_summary:
-            category_doc = await db_service.get_category_by_id(cat_summary['category_id'])
-            if category_doc:
-                categories_by_category[cat_summary['category_id']] = {
-                    "name": category_doc["name"],
-                    "color": category_doc["color"],
-                    "icon": category_doc["icon"],
-                    "amount": cat_summary['total'],
-                    "count": cat_summary['transaction_count']
-                }
+            categories_by_category[cat_summary['category_id']] = {
+                "name": cat_summary.get('category_name', 'Unknown'),
+                "color": cat_summary.get('category_color', '#415A77'),
+                "icon": cat_summary.get('category_icon', 'help-circle'),
+                "amount": cat_summary['total'],
+                "count": cat_summary['transaction_count']
+            }
 
         # Get recent transactions
         recent_transactions_docs = await db_service.get_transactions(
