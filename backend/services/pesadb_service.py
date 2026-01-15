@@ -228,13 +228,21 @@ class PesaDBService:
     @staticmethod
     async def create_transaction(transaction_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new transaction"""
-        # Convert nested objects to JSON strings
-        if 'mpesa_details' in transaction_data and transaction_data['mpesa_details']:
-            transaction_data['mpesa_details'] = json.dumps(transaction_data['mpesa_details'])
-        
-        if 'sms_metadata' in transaction_data and transaction_data['sms_metadata']:
-            transaction_data['sms_metadata'] = json.dumps(transaction_data['sms_metadata'])
-        
+        # Convert nested objects to JSON strings or remove None values
+        if 'mpesa_details' in transaction_data:
+            if transaction_data['mpesa_details']:
+                transaction_data['mpesa_details'] = json.dumps(transaction_data['mpesa_details'])
+            else:
+                # Remove None/null values - PesaDB doesn't handle None well for JSON columns
+                del transaction_data['mpesa_details']
+
+        if 'sms_metadata' in transaction_data:
+            if transaction_data['sms_metadata']:
+                transaction_data['sms_metadata'] = json.dumps(transaction_data['sms_metadata'])
+            else:
+                # Remove None/null values - PesaDB doesn't handle None well for JSON columns
+                del transaction_data['sms_metadata']
+
         sql = build_insert('transactions', transaction_data)
         await execute_db(sql)
         return transaction_data
@@ -242,17 +250,25 @@ class PesaDBService:
     @staticmethod
     async def update_transaction(transaction_id: str, update_data: Dict[str, Any], user_id: Optional[str] = None) -> bool:
         """Update a transaction"""
-        # Convert nested objects to JSON strings
-        if 'mpesa_details' in update_data and update_data['mpesa_details']:
-            update_data['mpesa_details'] = json.dumps(update_data['mpesa_details'])
-        
-        if 'sms_metadata' in update_data and update_data['sms_metadata']:
-            update_data['sms_metadata'] = json.dumps(update_data['sms_metadata'])
-        
+        # Convert nested objects to JSON strings or remove None values
+        if 'mpesa_details' in update_data:
+            if update_data['mpesa_details']:
+                update_data['mpesa_details'] = json.dumps(update_data['mpesa_details'])
+            else:
+                # Remove None/null values - PesaDB doesn't handle None well for JSON columns
+                del update_data['mpesa_details']
+
+        if 'sms_metadata' in update_data:
+            if update_data['sms_metadata']:
+                update_data['sms_metadata'] = json.dumps(update_data['sms_metadata'])
+            else:
+                # Remove None/null values - PesaDB doesn't handle None well for JSON columns
+                del update_data['sms_metadata']
+
         where_clause = f"id = '{transaction_id}'"
         if user_id:
             where_clause += f" AND user_id = '{user_id}'"
-        
+
         sql = build_update('transactions', update_data, where_clause)
         await execute_db(sql)
         return True
