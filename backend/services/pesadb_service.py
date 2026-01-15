@@ -198,7 +198,7 @@ class PesaDBService:
         
         result = await query_db(sql)
 
-        # Parse JSON fields
+        # Parse JSON fields and 'null' strings
         for txn in result:
             if 'mpesa_details' in txn and txn['mpesa_details'] and isinstance(txn['mpesa_details'], str):
                 # Handle 'null' string or valid JSON
@@ -212,6 +212,11 @@ class PesaDBService:
                     txn['sms_metadata'] = None
                 else:
                     txn['sms_metadata'] = json.loads(txn['sms_metadata'])
+            # Handle optional STRING fields
+            if txn.get('transaction_group_id') == 'null':
+                txn['transaction_group_id'] = None
+            if txn.get('parent_transaction_id') == 'null':
+                txn['parent_transaction_id'] = None
 
         return result
     
@@ -238,6 +243,11 @@ class PesaDBService:
                     txn['sms_metadata'] = None
                 else:
                     txn['sms_metadata'] = json.loads(txn['sms_metadata'])
+            # Handle optional STRING fields
+            if txn.get('transaction_group_id') == 'null':
+                txn['transaction_group_id'] = None
+            if txn.get('parent_transaction_id') == 'null':
+                txn['parent_transaction_id'] = None
             return txn
         return None
     
@@ -268,6 +278,17 @@ class PesaDBService:
         else:
             # If not provided, use JSON null value as string
             transaction_data['sms_metadata'] = 'null'
+
+        # Handle optional STRING columns - must use 'null' instead of None/NULL
+        if 'transaction_group_id' not in transaction_data or transaction_data.get('transaction_group_id') is None:
+            transaction_data['transaction_group_id'] = 'null'
+
+        if 'parent_transaction_id' not in transaction_data or transaction_data.get('parent_transaction_id') is None:
+            transaction_data['parent_transaction_id'] = 'null'
+
+        # Ensure transaction_role has a default value
+        if 'transaction_role' not in transaction_data or not transaction_data.get('transaction_role'):
+            transaction_data['transaction_role'] = 'primary'
 
         sql = build_insert('transactions', transaction_data)
         await execute_db(sql)
@@ -385,7 +406,7 @@ class PesaDBService:
         LIMIT {limit}
         """)
         
-        # Parse JSON fields
+        # Parse JSON fields and 'null' strings
         for txn in result:
             if 'mpesa_details' in txn and txn['mpesa_details'] and isinstance(txn['mpesa_details'], str):
                 # Handle 'null' string or valid JSON
@@ -399,6 +420,11 @@ class PesaDBService:
                     txn['sms_metadata'] = None
                 else:
                     txn['sms_metadata'] = json.loads(txn['sms_metadata'])
+            # Handle optional STRING fields
+            if txn.get('transaction_group_id') == 'null':
+                txn['transaction_group_id'] = None
+            if txn.get('parent_transaction_id') == 'null':
+                txn['parent_transaction_id'] = None
 
         return result
     
