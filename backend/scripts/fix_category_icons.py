@@ -1,287 +1,100 @@
+#!/usr/bin/env python3
 """
-Fix invalid category icons in the database.
+Fix Category Icons Script
 
-This script identifies categories with invalid icon names (emojis, special characters, etc.)
-and replaces them with valid Ionicons names.
+This script updates category icons from emojis to valid Ionicons names.
+Run this script to fix existing categories in the database.
+
+Usage:
+    python backend/scripts/fix_category_icons.py
 """
 
 import asyncio
-import re
 import sys
-import os
+from pathlib import Path
 
-# Add parent directory to path so we can import from backend
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add backend directory to path
+backend_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_dir))
 
 from config.pesadb import query_db, execute_db
 
-# Valid Ionicons pattern: lowercase letters and hyphens
-IONICONS_PATTERN = re.compile(r'^[a-z]+(-[a-z]+)*$')
-
-# Emoji detection pattern
-EMOJI_PATTERN = re.compile(
-    r'[\U0001F300-\U0001F9FF\U00002600-\U000026FF\U00002700-\U000027BF]'
-)
-
-# Mapping of common invalid icons to valid replacements
-ICON_MAPPING = {
-    '📌': 'pin',
-    '🍕': 'restaurant',
-    '🍔': 'restaurant',
-    '🍜': 'restaurant',
-    '🚗': 'car',
-    '🚕': 'car',
-    '🚙': 'car',
-    '⚡': 'flash',
-    '💡': 'bulb',
-    '🏠': 'home',
-    '🏡': 'home',
-    '🏥': 'medical',
-    '💊': 'medical',
-    '🎓': 'school',
-    '📚': 'school',
-    '🛒': 'cart',
-    '🛍️': 'shopping-bag',
-    '💰': 'cash',
-    '💵': 'cash',
-    '💳': 'card',
-    '🎵': 'musical-notes',
-    '🎶': 'musical-notes',
-    '📱': 'phone-portrait',
-    '☎️': 'call',
-    '✈️': 'airplane',
-    '🚀': 'rocket',
-    '🎉': 'balloon',
-    '🎈': 'balloon',
-    '🍺': 'beer',
-    '☕': 'cafe',
-    '🍰': 'restaurant',
-    '🎮': 'game-controller',
-    '📺': 'tv',
-    '💻': 'laptop',
-    '⚽': 'football',
-    '🏋️': 'fitness',
-    '🎬': 'film',
-    '📷': 'camera',
-    '🎨': 'color-palette',
-    '✉️': 'mail',
-    '📧': 'mail',
-    '🔒': 'lock-closed',
-    '🔓': 'lock-open',
-    '⚙️': 'settings',
-    '🔧': 'construct',
-    '🔨': 'hammer',
-    '💼': 'briefcase',
-    '👔': 'shirt',
-    '👗': 'shirt',
-    '👞': 'footsteps',
-    '🎓': 'school',
-    '📖': 'book',
-    '✏️': 'pencil',
-    '✍️': 'create',
-    '📝': 'document-text',
-    '📄': 'document',
-    '📋': 'clipboard',
-    '📊': 'stats-chart',
-    '📈': 'trending-up',
-    '📉': 'trending-down',
-    '🔔': 'notifications',
-    '⏰': 'alarm',
-    '⏱️': 'timer',
-    '🕐': 'time',
-    '📅': 'calendar',
-    '📆': 'calendar-number',
-    '🎁': 'gift',
-    '🎂': 'cafe',
-    '🍿': 'fast-food',
-    '🌍': 'globe',
-    '🌎': 'globe',
-    '🌏': 'earth',
-    '⭐': 'star',
-    '❤️': 'heart',
-    '💙': 'heart',
-    '💚': 'heart',
-    '💛': 'heart',
-    '🔥': 'flame',
-    '💧': 'water',
-    '🌧️': 'rainy',
-    '☀️': 'sunny',
-    '🌙': 'moon',
-    '⚠️': 'warning',
-    '❌': 'close-circle',
-    '✅': 'checkmark-circle',
-    '❓': 'help-circle',
-    '❗': 'alert-circle',
-    '➕': 'add-circle',
-    '➖': 'remove-circle',
-    '🔍': 'search',
-}
-
-# Default fallback icon
-DEFAULT_ICON = 'help-circle'
-
-
-def is_valid_ionicon(icon_name: str) -> bool:
-    """Check if an icon name is valid for Ionicons"""
-    if not icon_name:
-        return False
-    
-    # Check for emojis
-    if EMOJI_PATTERN.search(icon_name):
-        return False
-    
-    # Check if it matches Ionicons pattern
-    if IONICONS_PATTERN.match(icon_name):
-        return True
-    
-    return False
-
-
-def get_replacement_icon(invalid_icon: str, category_name: str) -> str:
-    """Get a replacement icon for an invalid icon"""
-    
-    # First, check direct mapping
-    if invalid_icon in ICON_MAPPING:
-        return ICON_MAPPING[invalid_icon]
-    
-    # Try to infer from category name
-    category_lower = category_name.lower()
-    
-    if 'food' in category_lower or 'dining' in category_lower or 'restaurant' in category_lower:
-        return 'restaurant'
-    elif 'transport' in category_lower or 'travel' in category_lower or 'car' in category_lower:
-        return 'car'
-    elif 'utility' in category_lower or 'utilities' in category_lower or 'electric' in category_lower:
-        return 'flash'
-    elif 'shopping' in category_lower or 'shop' in category_lower:
-        return 'cart'
-    elif 'health' in category_lower or 'medical' in category_lower:
-        return 'medical'
-    elif 'education' in category_lower or 'school' in category_lower:
-        return 'school'
-    elif 'entertainment' in category_lower or 'fun' in category_lower:
-        return 'musical-notes'
-    elif 'bill' in category_lower or 'fee' in category_lower:
-        return 'receipt'
-    elif 'income' in category_lower or 'salary' in category_lower:
-        return 'cash'
-    elif 'home' in category_lower or 'house' in category_lower:
-        return 'home'
-    elif 'pin' in category_lower or 'save' in category_lower:
-        return 'pin'
-    
-    # Default fallback
-    return DEFAULT_ICON
-
 
 async def fix_category_icons():
-    """Find and fix invalid category icons"""
+    """Update category icons from emojis to valid Ionicons names"""
+    
+    print("🔧 Fixing category icons...")
+    
+    # Mapping of category IDs to their correct icon names
+    icon_mapping = {
+        'cat-food': 'restaurant',
+        'cat-transport': 'car',
+        'cat-shopping': 'shopping-bag',
+        'cat-bills': 'receipt',
+        'cat-entertainment': 'film',
+        'cat-health': 'medical',
+        'cat-education': 'book',
+        'cat-airtime': 'call',
+        'cat-transfers': 'swap-horizontal',
+        'cat-savings': 'wallet',
+        'cat-income': 'cash',
+        'cat-other': 'ellipsis-horizontal',
+    }
+    
+    success_count = 0
+    error_count = 0
+    
+    for cat_id, icon_name in icon_mapping.items():
+        try:
+            # Update the icon for this category
+            sql = f"UPDATE categories SET icon = '{icon_name}' WHERE id = '{cat_id}'"
+            await execute_db(sql)
+            print(f"✅ Updated {cat_id} to use icon '{icon_name}'")
+            success_count += 1
+        except Exception as e:
+            print(f"⚠️  Failed to update {cat_id}: {str(e)}")
+            error_count += 1
+    
+    print("\n" + "="*60)
+    print(f"✅ Category icon fix completed!")
+    print(f"   - Successful: {success_count}")
+    print(f"   - Errors: {error_count}")
+    print("="*60)
+    
+    # Verify the changes
+    print("\n🔍 Verifying categories...")
     try:
-        print("🔍 Checking for invalid category icons...")
-        
-        # Get all categories
-        categories = await query_db("SELECT * FROM categories")
-        
-        if not categories:
-            print("❌ No categories found in database")
-            return
-        
-        print(f"📊 Found {len(categories)} categories")
-        
-        invalid_categories = []
-        
-        # Check each category
-        for category in categories:
-            icon = category.get('icon', '')
-            name = category.get('name', 'Unknown')
-            category_id = category.get('id')
-            
-            if not is_valid_ionicon(icon):
-                invalid_categories.append({
-                    'id': category_id,
-                    'name': name,
-                    'current_icon': icon,
-                    'is_default': category.get('is_default', False)
-                })
-        
-        if not invalid_categories:
-            print("✅ All category icons are valid!")
-            return
-        
-        print(f"\n⚠️ Found {len(invalid_categories)} categories with invalid icons:\n")
-        
-        # Display invalid categories and their replacements
-        updates = []
-        for cat in invalid_categories:
-            replacement_icon = get_replacement_icon(cat['current_icon'], cat['name'])
-            updates.append({
-                'id': cat['id'],
-                'name': cat['name'],
-                'current_icon': cat['current_icon'],
-                'new_icon': replacement_icon
-            })
-            
-            print(f"  • {cat['name']}")
-            print(f"    Current: '{cat['current_icon']}'")
-            print(f"    Replacement: '{replacement_icon}'\n")
-        
-        # Ask for confirmation
-        print("=" * 60)
-        response = input("\n🔧 Do you want to apply these fixes? (yes/no): ").strip().lower()
-        
-        if response not in ['yes', 'y']:
-            print("❌ Operation cancelled")
-            return
-        
-        # Apply updates
-        print("\n🔄 Applying fixes...")
-        fixed_count = 0
-        
-        for update in updates:
-            try:
-                sql = f"""
-                    UPDATE categories 
-                    SET icon = '{update['new_icon']}' 
-                    WHERE id = '{update['id']}'
-                """
-                await execute_db(sql)
-                print(f"  ✅ Fixed: {update['name']}")
-                fixed_count += 1
-            except Exception as e:
-                print(f"  ❌ Failed to fix {update['name']}: {str(e)}")
-        
-        print(f"\n✅ Successfully fixed {fixed_count} out of {len(updates)} categories!")
-        print("\n💡 Please restart your React Native app to see the changes.")
-        
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-
-
-async def list_all_icons():
-    """List all category icons (for debugging)"""
-    try:
-        categories = await query_db("SELECT id, name, icon, is_default FROM categories ORDER BY name")
-        
-        print("\n📋 All Category Icons:")
-        print("=" * 60)
-        
+        categories = await query_db("SELECT id, name, icon FROM categories WHERE is_default = TRUE")
+        print(f"\nFound {len(categories)} default categories:")
         for cat in categories:
-            status = "✅" if is_valid_ionicon(cat['icon']) else "❌"
-            default = " [DEFAULT]" if cat.get('is_default') else ""
-            print(f"{status} {cat['name']}{default}")
-            print(f"   Icon: '{cat['icon']}'")
-            print()
-        
+            print(f"  - {cat['name']}: {cat['icon']}")
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"⚠️  Could not verify categories: {str(e)}")
+
+
+async def main():
+    """Main execution function"""
+    
+    print("\n" + "="*60)
+    print("  Fix Category Icons")
+    print("  M-Pesa Expense Tracker")
+    print("="*60 + "\n")
+    
+    try:
+        await fix_category_icons()
+        
+        print("\n" + "="*60)
+        print("  ✅ Fix Complete!")
+        print("  Category icons have been updated.")
+        print("="*60 + "\n")
+    
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Fix cancelled by user.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\n❌ Fix failed: {str(e)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "list":
-        asyncio.run(list_all_icons())
-    else:
-        asyncio.run(fix_category_icons())
+    asyncio.run(main())

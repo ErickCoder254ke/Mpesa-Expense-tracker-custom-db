@@ -228,20 +228,29 @@ class PesaDBService:
     @staticmethod
     async def create_transaction(transaction_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new transaction"""
-        # Convert nested objects to JSON strings or remove None values
+        # Ensure all required columns exist with proper defaults
+        # PesaDB requires ALL columns to be present in INSERT statements
+
+        # Convert nested objects to JSON strings or set to None for NULL
         if 'mpesa_details' in transaction_data:
             if transaction_data['mpesa_details']:
                 transaction_data['mpesa_details'] = json.dumps(transaction_data['mpesa_details'])
             else:
-                # Remove None/null values - PesaDB doesn't handle None well for JSON columns
-                del transaction_data['mpesa_details']
+                # Keep the key but set to None - escape_string will convert to NULL
+                transaction_data['mpesa_details'] = None
+        else:
+            # If not provided, add it as None for NULL
+            transaction_data['mpesa_details'] = None
 
         if 'sms_metadata' in transaction_data:
             if transaction_data['sms_metadata']:
                 transaction_data['sms_metadata'] = json.dumps(transaction_data['sms_metadata'])
             else:
-                # Remove None/null values - PesaDB doesn't handle None well for JSON columns
-                del transaction_data['sms_metadata']
+                # Keep the key but set to None - escape_string will convert to NULL
+                transaction_data['sms_metadata'] = None
+        else:
+            # If not provided, add it as None for NULL
+            transaction_data['sms_metadata'] = None
 
         sql = build_insert('transactions', transaction_data)
         await execute_db(sql)

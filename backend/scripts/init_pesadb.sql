@@ -135,51 +135,51 @@ CREATE TABLE status_checks (
 
 -- Food & Dining
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-food', NULL, 'Food & Dining', '🍔', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "cafe", "hotel", "nyama", "choma", "kfc", "pizza", "java"]', TRUE);
+VALUES ('cat-food', NULL, 'Food & Dining', 'restaurant', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "cafe", "hotel", "nyama", "choma", "kfc", "pizza", "java"]', TRUE);
 
 -- Transport
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-transport', NULL, 'Transport', '🚗', '#4ECDC4', '["taxi", "bus", "matatu", "uber", "bolt", "fuel", "parking", "transport", "travel", "petrol", "diesel", "little", "total", "shell"]', TRUE);
+VALUES ('cat-transport', NULL, 'Transport', 'car', '#4ECDC4', '["taxi", "bus", "matatu", "uber", "bolt", "fuel", "parking", "transport", "travel", "petrol", "diesel", "little", "total", "shell"]', TRUE);
 
 -- Shopping
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-shopping', NULL, 'Shopping', '🛍️', '#95E1D3', '["shop", "store", "mall", "clothing", "electronics", "supermarket", "carrefour", "naivas", "quickmart", "tuskys", "chandarana"]', TRUE);
+VALUES ('cat-shopping', NULL, 'Shopping', 'shopping-bag', '#95E1D3', '["shop", "store", "mall", "clothing", "electronics", "supermarket", "carrefour", "naivas", "quickmart", "tuskys", "chandarana"]', TRUE);
 
 -- Bills & Utilities
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-bills', NULL, 'Bills & Utilities', '📱', '#F38181', '["bill", "electricity", "water", "internet", "phone", "utility", "kplc", "nairobi water", "zuku", "safaricom", "airtel", "telkom", "rent", "dstv", "gotv", "startimes"]', TRUE);
+VALUES ('cat-bills', NULL, 'Bills & Utilities', 'receipt', '#F38181', '["bill", "electricity", "water", "internet", "phone", "utility", "kplc", "nairobi water", "zuku", "safaricom", "airtel", "telkom", "rent", "dstv", "gotv", "startimes"]', TRUE);
 
 -- Entertainment
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-entertainment', NULL, 'Entertainment', '🎬', '#AA96DA', '["movie", "cinema", "game", "entertainment", "music", "showmax", "netflix", "spotify", "club", "concert", "theater"]', TRUE);
+VALUES ('cat-entertainment', NULL, 'Entertainment', 'film', '#AA96DA', '["movie", "cinema", "game", "entertainment", "music", "showmax", "netflix", "spotify", "club", "concert", "theater"]', TRUE);
 
 -- Health & Fitness
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-health', NULL, 'Health & Fitness', '⚕️', '#FCBAD3', '["hospital", "pharmacy", "doctor", "medicine", "gym", "health", "clinic", "lab", "dentist", "fitness", "wellness"]', TRUE);
+VALUES ('cat-health', NULL, 'Health & Fitness', 'medical', '#FCBAD3', '["hospital", "pharmacy", "doctor", "medicine", "gym", "health", "clinic", "lab", "dentist", "fitness", "wellness"]', TRUE);
 
 -- Education
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-education', NULL, 'Education', '📚', '#A8D8EA', '["school", "books", "tuition", "education", "course", "university", "college", "training", "fees", "stationary"]', TRUE);
+VALUES ('cat-education', NULL, 'Education', 'book', '#A8D8EA', '["school", "books", "tuition", "education", "course", "university", "college", "training", "fees", "stationary"]', TRUE);
 
 -- Airtime & Data
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-airtime', NULL, 'Airtime & Data', '📞', '#FFFFD2', '["airtime", "data", "bundles", "safaricom", "airtel", "telkom", "faiba", "wifi"]', TRUE);
+VALUES ('cat-airtime', NULL, 'Airtime & Data', 'call', '#FFFFD2', '["airtime", "data", "bundles", "safaricom", "airtel", "telkom", "faiba", "wifi"]', TRUE);
 
 -- Money Transfer
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-transfers', NULL, 'Money Transfer', '💸', '#FEC8D8', '["transfer", "send money", "mpesa", "paybill", "till", "buy goods", "agent"]', TRUE);
+VALUES ('cat-transfers', NULL, 'Money Transfer', 'swap-horizontal', '#FEC8D8', '["transfer", "send money", "mpesa", "paybill", "till", "buy goods", "agent"]', TRUE);
 
 -- Savings & Investments
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-savings', NULL, 'Savings & Investments', '💰', '#957DAD', '["savings", "investment", "deposit", "savings account", "mshwari", "kcb mpesa", "fuliza", "okoa", "equity", "co-op"]', TRUE);
+VALUES ('cat-savings', NULL, 'Savings & Investments', 'wallet', '#957DAD', '["savings", "investment", "deposit", "savings account", "mshwari", "kcb mpesa", "fuliza", "okoa", "equity", "co-op"]', TRUE);
 
 -- Income/Salary
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-income', NULL, 'Income', '💵', '#90EE90', '["salary", "income", "payment", "received", "deposit", "earnings", "wage", "bonus", "commission"]', TRUE);
+VALUES ('cat-income', NULL, 'Income', 'cash', '#90EE90', '["salary", "income", "payment", "received", "deposit", "earnings", "wage", "bonus", "commission"]', TRUE);
 
 -- Other
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-VALUES ('cat-other', NULL, 'Other', '📌', '#D4A5A5', '[]', TRUE);
+VALUES ('cat-other', NULL, 'Other', 'ellipsis-horizontal', '#D4A5A5', '[]', TRUE);
 
 -- ============================================================================
 -- INITIALIZATION COMPLETE

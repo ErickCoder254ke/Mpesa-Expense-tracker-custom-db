@@ -79,17 +79,17 @@ async def seed_default_categories():
     print("\n📦 Seeding default categories...")
     
     default_categories = [
-        ('cat-food', 'Food & Dining', '🍔', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "nyama", "choma"]'),
-        ('cat-transport', 'Transport', '🚗', '#4ECDC4', '["taxi", "bus", "matatu", "uber", "fuel", "transport", "travel"]'),
-        ('cat-shopping', 'Shopping', '🛍️', '#95E1D3', '["shop", "store", "mall", "clothing", "electronics", "supermarket"]'),
-        ('cat-bills', 'Bills & Utilities', '📱', '#F38181', '["bill", "electricity", "water", "internet", "phone", "utility", "kplc", "nairobi water"]'),
-        ('cat-entertainment', 'Entertainment', '🎬', '#AA96DA', '["movie", "cinema", "game", "entertainment", "music", "showmax", "netflix"]'),
-        ('cat-health', 'Health & Fitness', '⚕️', '#FCBAD3', '["hospital", "pharmacy", "doctor", "medicine", "gym", "health", "clinic"]'),
-        ('cat-education', 'Education', '📚', '#A8D8EA', '["school", "books", "tuition", "education", "course", "university"]'),
-        ('cat-airtime', 'Airtime & Data', '📞', '#FFFFD2', '["airtime", "data", "bundles", "safaricom", "airtel", "telkom"]'),
-        ('cat-transfers', 'Money Transfer', '💸', '#FEC8D8', '["transfer", "send money", "mpesa", "paybill", "till"]'),
-        ('cat-savings', 'Savings & Investments', '💰', '#957DAD', '["savings", "investment", "deposit", "savings account", "mshwari", "kcb mpesa"]'),
-        ('cat-other', 'Other', '📌', '#D4A5A5', '[]'),
+        ('cat-food', 'Food & Dining', 'restaurant', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "nyama", "choma"]'),
+        ('cat-transport', 'Transport', 'car', '#4ECDC4', '["taxi", "bus", "matatu", "uber", "fuel", "transport", "travel"]'),
+        ('cat-shopping', 'Shopping', 'shopping-bag', '#95E1D3', '["shop", "store", "mall", "clothing", "electronics", "supermarket"]'),
+        ('cat-bills', 'Bills & Utilities', 'receipt', '#F38181', '["bill", "electricity", "water", "internet", "phone", "utility", "kplc", "nairobi water"]'),
+        ('cat-entertainment', 'Entertainment', 'film', '#AA96DA', '["movie", "cinema", "game", "entertainment", "music", "showmax", "netflix"]'),
+        ('cat-health', 'Health & Fitness', 'medical', '#FCBAD3', '["hospital", "pharmacy", "doctor", "medicine", "gym", "health", "clinic"]'),
+        ('cat-education', 'Education', 'book', '#A8D8EA', '["school", "books", "tuition", "education", "course", "university"]'),
+        ('cat-airtime', 'Airtime & Data', 'call', '#FFFFD2', '["airtime", "data", "bundles", "safaricom", "airtel", "telkom"]'),
+        ('cat-transfers', 'Money Transfer', 'swap-horizontal', '#FEC8D8', '["transfer", "send money", "mpesa", "paybill", "till"]'),
+        ('cat-savings', 'Savings & Investments', 'wallet', '#957DAD', '["savings", "investment", "deposit", "savings account", "mshwari", "kcb mpesa"]'),
+        ('cat-other', 'Other', 'ellipsis-horizontal', '#D4A5A5', '[]'),
     ]
     
     for cat_id, name, icon, color, keywords in default_categories:
