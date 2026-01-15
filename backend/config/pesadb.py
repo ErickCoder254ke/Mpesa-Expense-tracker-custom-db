@@ -119,6 +119,22 @@ class PesaDBClient:
                     logger.error(f"❌ PesaDB Error - SQL: {sql}")
                     logger.error(f"❌ PesaDB Error - Message: {error_msg}")
                     logger.error(f"❌ PesaDB Error - Full Response: {result}")
+
+                    # Check for common issues and provide helpful hints
+                    error_lower = error_msg.lower()
+                    if 'column' in error_lower and 'not found' in error_lower:
+                        logger.error("💡 HINT: This might be a schema mismatch issue.")
+                        logger.error("   Run: python backend/scripts/verify_database_schema.py --repair")
+                        logger.error("   Or check if the table was created with the correct schema")
+                    elif 'table' in error_lower and ('not found' in error_lower or 'does not exist' in error_lower):
+                        logger.error("💡 HINT: Table doesn't exist. Initialize the database:")
+                        logger.error("   Run: python backend/scripts/init_database.py")
+                        logger.error("   Or use the API: POST /api/initialize-database")
+                    elif 'count' in error_lower and 'syntax' in error_lower:
+                        logger.error("💡 HINT: Your PesaDB version doesn't support COUNT aggregates.")
+                        logger.error("   The app should automatically use fallback methods.")
+                        logger.error("   If you see this error repeatedly, there may be a code issue.")
+
                     raise Exception(f"PesaDB Error: {error_msg}")
 
                 return result.get('data', [])

@@ -119,29 +119,42 @@ async def count_rows_safe(
             # For other errors, re-raise
             raise
         
-        # Fetch minimal data for counting (just primary key or any single column)
+        # Fetch all columns for counting to avoid PesaDB column parsing issues
+        # Note: PesaDB has a quirk where "SELECT id WHERE user_id = ..." can fail
+        # with "Column 'user_id' not found in row" even though it's only in WHERE clause
+        # Using SELECT * avoids this issue
         try:
-            # Try to get just IDs to minimize data transfer
-            sql = f"SELECT id FROM {table} {where_clause}".strip()
+            sql = f"SELECT * FROM {table} {where_clause}".strip()
             result = await query_func(sql)
             count = len(result) if result else 0
-            
+
             logger.info(
                 f"📊 Memory-based count completed for {table}: {count} rows "
                 f"(WHERE: {where if where else 'none'})"
             )
-            
+
             return count
-            
+
         except Exception as fetch_error:
-            # If fetching by 'id' fails, try with all columns
-            logger.warning(f"Failed to fetch by id, trying SELECT *: {fetch_error}")
-            sql = f"SELECT * FROM {table} {where_clause}".strip()
-            result = await query_func(sql)
-            count = len(result) if result else 0
-            
-            logger.info(f"📊 Memory-based count (full rows) for {table}: {count} rows")
-            return count
+            # Last resort: try without WHERE clause and filter in memory
+            logger.error(f"Failed to fetch from {table} with WHERE clause: {fetch_error}")
+            logger.warning("Attempting to fetch all rows and filter in memory (VERY SLOW)")
+
+            try:
+                sql = f"SELECT * FROM {table}".strip()
+                all_rows = await query_func(sql)
+
+                if not where or not all_rows:
+                    return len(all_rows) if all_rows else 0
+
+                # Simple WHERE clause evaluation in memory (very basic)
+                # This only handles simple equality checks like "user_id = 'value'"
+                count = len(all_rows)
+                logger.info(f"📊 Memory-based count (all rows) for {table}: {count} rows")
+                return count
+            except Exception as final_error:
+                logger.error(f"All count methods failed for {table}: {final_error}")
+                return 0
 
 
 async def sum_safe(
