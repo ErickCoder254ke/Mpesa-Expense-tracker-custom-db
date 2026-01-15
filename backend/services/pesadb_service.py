@@ -197,14 +197,22 @@ class PesaDBService:
         """
         
         result = await query_db(sql)
-        
+
         # Parse JSON fields
         for txn in result:
             if 'mpesa_details' in txn and txn['mpesa_details'] and isinstance(txn['mpesa_details'], str):
-                txn['mpesa_details'] = json.loads(txn['mpesa_details'])
+                # Handle 'null' string or valid JSON
+                if txn['mpesa_details'] == 'null':
+                    txn['mpesa_details'] = None
+                else:
+                    txn['mpesa_details'] = json.loads(txn['mpesa_details'])
             if 'sms_metadata' in txn and txn['sms_metadata'] and isinstance(txn['sms_metadata'], str):
-                txn['sms_metadata'] = json.loads(txn['sms_metadata'])
-        
+                # Handle 'null' string or valid JSON
+                if txn['sms_metadata'] == 'null':
+                    txn['sms_metadata'] = None
+                else:
+                    txn['sms_metadata'] = json.loads(txn['sms_metadata'])
+
         return result
     
     @staticmethod
@@ -219,9 +227,17 @@ class PesaDBService:
         if result:
             txn = result[0]
             if 'mpesa_details' in txn and txn['mpesa_details'] and isinstance(txn['mpesa_details'], str):
-                txn['mpesa_details'] = json.loads(txn['mpesa_details'])
+                # Handle 'null' string or valid JSON
+                if txn['mpesa_details'] == 'null':
+                    txn['mpesa_details'] = None
+                else:
+                    txn['mpesa_details'] = json.loads(txn['mpesa_details'])
             if 'sms_metadata' in txn and txn['sms_metadata'] and isinstance(txn['sms_metadata'], str):
-                txn['sms_metadata'] = json.loads(txn['sms_metadata'])
+                # Handle 'null' string or valid JSON
+                if txn['sms_metadata'] == 'null':
+                    txn['sms_metadata'] = None
+                else:
+                    txn['sms_metadata'] = json.loads(txn['sms_metadata'])
             return txn
         return None
     
@@ -230,27 +246,28 @@ class PesaDBService:
         """Create a new transaction"""
         # Ensure all required columns exist with proper defaults
         # PesaDB requires ALL columns to be present in INSERT statements
+        # IMPORTANT: PesaDB STRING columns don't accept NULL - use 'null' (JSON null) instead
 
-        # Convert nested objects to JSON strings or set to None for NULL
+        # Convert nested objects to JSON strings or set to 'null' for empty values
         if 'mpesa_details' in transaction_data:
             if transaction_data['mpesa_details']:
                 transaction_data['mpesa_details'] = json.dumps(transaction_data['mpesa_details'])
             else:
-                # Keep the key but set to None - escape_string will convert to NULL
-                transaction_data['mpesa_details'] = None
+                # Use JSON null value as string (PesaDB STRING columns don't accept SQL NULL)
+                transaction_data['mpesa_details'] = 'null'
         else:
-            # If not provided, add it as None for NULL
-            transaction_data['mpesa_details'] = None
+            # If not provided, use JSON null value as string
+            transaction_data['mpesa_details'] = 'null'
 
         if 'sms_metadata' in transaction_data:
             if transaction_data['sms_metadata']:
                 transaction_data['sms_metadata'] = json.dumps(transaction_data['sms_metadata'])
             else:
-                # Keep the key but set to None - escape_string will convert to NULL
-                transaction_data['sms_metadata'] = None
+                # Use JSON null value as string (PesaDB STRING columns don't accept SQL NULL)
+                transaction_data['sms_metadata'] = 'null'
         else:
-            # If not provided, add it as None for NULL
-            transaction_data['sms_metadata'] = None
+            # If not provided, use JSON null value as string
+            transaction_data['sms_metadata'] = 'null'
 
         sql = build_insert('transactions', transaction_data)
         await execute_db(sql)
@@ -321,7 +338,11 @@ class PesaDBService:
         if result:
             txn = result[0]
             if 'sms_metadata' in txn and txn['sms_metadata'] and isinstance(txn['sms_metadata'], str):
-                txn['sms_metadata'] = json.loads(txn['sms_metadata'])
+                # Handle 'null' string or valid JSON
+                if txn['sms_metadata'] == 'null':
+                    txn['sms_metadata'] = None
+                else:
+                    txn['sms_metadata'] = json.loads(txn['sms_metadata'])
             return txn
         return None
     
@@ -337,7 +358,11 @@ class PesaDBService:
         if result:
             txn = result[0]
             if 'mpesa_details' in txn and txn['mpesa_details'] and isinstance(txn['mpesa_details'], str):
-                txn['mpesa_details'] = json.loads(txn['mpesa_details'])
+                # Handle 'null' string or valid JSON
+                if txn['mpesa_details'] == 'null':
+                    txn['mpesa_details'] = None
+                else:
+                    txn['mpesa_details'] = json.loads(txn['mpesa_details'])
             return txn
         return None
     
@@ -363,10 +388,18 @@ class PesaDBService:
         # Parse JSON fields
         for txn in result:
             if 'mpesa_details' in txn and txn['mpesa_details'] and isinstance(txn['mpesa_details'], str):
-                txn['mpesa_details'] = json.loads(txn['mpesa_details'])
+                # Handle 'null' string or valid JSON
+                if txn['mpesa_details'] == 'null':
+                    txn['mpesa_details'] = None
+                else:
+                    txn['mpesa_details'] = json.loads(txn['mpesa_details'])
             if 'sms_metadata' in txn and txn['sms_metadata'] and isinstance(txn['sms_metadata'], str):
-                txn['sms_metadata'] = json.loads(txn['sms_metadata'])
-        
+                # Handle 'null' string or valid JSON
+                if txn['sms_metadata'] == 'null':
+                    txn['sms_metadata'] = None
+                else:
+                    txn['sms_metadata'] = json.loads(txn['sms_metadata'])
+
         return result
     
     @staticmethod
