@@ -81,6 +81,116 @@ class DatabaseInitializer:
                 # For deployment safety, assume table doesn't exist if we can't verify
                 logger.warning(f"⚠️  Error checking table '{table_name}': {str(e)}")
                 return False
+
+    @staticmethod
+    async def check_users_table_schema() -> dict:
+        """
+        Check if the users table has the correct schema for email/password authentication
+
+        Returns:
+            dict with schema check results
+        """
+        result = {
+            'exists': False,
+            'has_correct_schema': False,
+            'has_email': False,
+            'has_password_hash': False,
+            'is_old_schema': False,
+            'needs_migration': False
+        }
+
+        try:
+            # Check if table exists first
+            exists = await DatabaseInitializer.table_exists('users')
+            result['exists'] = exists
+
+            if not exists:
+                logger.debug("Users table does not exist yet - will be created with correct schema")
+                return result
+
+            # Try to query with email column
+            try:
+                await query_db("SELECT id, email FROM users LIMIT 1")
+                result['has_email'] = True
+                logger.debug("✅ Users table has 'email' column")
+            except Exception as e:
+                if 'email' in str(e).lower() and 'not' in str(e).lower():
+                    result['has_email'] = False
+                    logger.warning("⚠️  Users table missing 'email' column - old schema detected")
+
+            # Try to query with password_hash column
+            try:
+                await query_db("SELECT id, password_hash FROM users LIMIT 1")
+                result['has_password_hash'] = True
+                logger.debug("✅ Users table has 'password_hash' column")
+            except Exception as e:
+                if 'password_hash' in str(e).lower() and 'not' in str(e).lower():
+                    result['has_password_hash'] = False
+                    logger.warning("⚠️  Users table missing 'password_hash' column - old schema detected")
+
+            # Determine schema status
+            result['has_correct_schema'] = result['has_email'] and result['has_password_hash']
+            result['is_old_schema'] = not result['has_correct_schema']
+            result['needs_migration'] = result['exists'] and not result['has_correct_schema']
+
+        except Exception as e:
+            logger.error(f"Error checking users table schema: {str(e)}")
+            result['error'] = str(e)
+
+        return result
+
+    @staticmethod
+    async def migrate_users_table():
+        """
+        Migrate users table from old schema to new email/password schema
+
+        Returns:
+            True if migration succeeded, False otherwise
+        """
+        logger.warning("🔄 Starting automatic users table migration...")
+        logger.warning("⚠️  This will drop the old users table and create a new one")
+        logger.warning("⚠️  All existing users will be deleted")
+
+        try:
+            # Step 1: Drop old users table
+            logger.info("📝 Dropping old users table...")
+            try:
+                await execute_db("DROP TABLE users")
+                logger.info("✅ Old users table dropped")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if 'does not exist' in error_msg or 'not found' in error_msg:
+                    logger.info("ℹ️  Users table already dropped or didn't exist")
+                else:
+                    logger.error(f"Error dropping users table: {str(e)}")
+                    raise
+
+            # Step 2: Create new users table with correct schema
+            logger.info("📝 Creating users table with email/password schema...")
+            create_statement = """CREATE TABLE users (
+    id STRING PRIMARY KEY,
+    email STRING,
+    password_hash STRING,
+    name STRING,
+    created_at STRING,
+    preferences STRING
+)"""
+            await execute_db(create_statement)
+            logger.info("✅ New users table created with email/password schema")
+
+            # Step 3: Verify new schema
+            schema_check = await DatabaseInitializer.check_users_table_schema()
+            if schema_check['has_correct_schema']:
+                logger.info("✅ Users table migration completed successfully")
+                logger.info("   New schema verified: email and password_hash columns present")
+                return True
+            else:
+                logger.error("❌ Migration completed but schema verification failed")
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ Users table migration failed: {str(e)}", exc_info=True)
+            return False
     
     @staticmethod
     async def load_sql_from_file() -> str:
@@ -654,6 +764,7 @@ class DatabaseInitializer:
             'categories_seeded': 0,
             'user_created': False,
             'verified': False,
+            'migrated': False,
             'message': '',
             'errors': []
         }
@@ -669,6 +780,29 @@ class DatabaseInitializer:
                 result['errors'].append(error_msg)
                 logger.error(f"❌ {error_msg}")
                 # Continue anyway - database might exist
+
+            # Step 0.5: Check for schema migration needs
+            logger.info("📝 Step 0.5: Checking users table schema...")
+            schema_check = await DatabaseInitializer.check_users_table_schema()
+
+            if schema_check['needs_migration']:
+                logger.warning("⚠️  OLD SCHEMA DETECTED - Users table needs migration!")
+                logger.warning("   Current schema is PIN-based, need to migrate to email/password")
+
+                # Automatically migrate
+                migration_success = await DatabaseInitializer.migrate_users_table()
+                result['migrated'] = migration_success
+
+                if not migration_success:
+                    error_msg = 'Users table migration failed - signup/login will not work'
+                    result['errors'].append(error_msg)
+                    logger.error(f"❌ {error_msg}")
+                else:
+                    logger.info("✅ Users table migrated successfully to email/password schema")
+            elif schema_check['exists'] and schema_check['has_correct_schema']:
+                logger.info("✅ Users table already has correct email/password schema")
+            else:
+                logger.info("ℹ️  Users table will be created with correct schema")
 
             # Step 1: Create tables
             logger.info("📝 Step 1: Creating tables...")

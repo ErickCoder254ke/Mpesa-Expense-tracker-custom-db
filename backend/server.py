@@ -182,13 +182,17 @@ async def startup_db_initialization():
         )
 
         if result['success']:
+            migration_msg = " (schema migrated)" if result.get('migrated') else ""
             logger.info(
-                f"✅ Database ready: "
+                f"✅ Database ready{migration_msg}: "
                 f"{result['tables_created']} tables created, "
                 f"{result['tables_skipped']} existed, "
                 f"{result['categories_seeded']} categories seeded, "
                 f"Default user {'created' if result.get('user_created') else 'already exists'}"
             )
+            if result.get('migrated'):
+                logger.warning("⚠️  Users table was migrated from PIN to email/password schema")
+                logger.warning("⚠️  All previous users have been deleted - create new accounts via signup")
             if result.get('user_created'):
                 logger.warning("⚠️  Default user created with email='admin@example.com' and password='admin123' - please change during first login")
         else:
