@@ -91,9 +91,9 @@ class PesaDBService:
         return user_data
     
     @staticmethod
-    async def update_user_pin(user_id: str, new_pin_hash: str) -> bool:
-        """Update user's PIN hash"""
-        sql = build_update('users', {'pin_hash': new_pin_hash}, f"id = '{user_id}'")
+    async def update_user_password(user_id: str, new_password_hash: str) -> bool:
+        """Update user's password hash"""
+        sql = build_update('users', {'password_hash': new_password_hash}, f"id = '{user_id}'")
         await execute_db(sql)
         return True
     

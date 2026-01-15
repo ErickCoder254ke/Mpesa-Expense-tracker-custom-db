@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from models.user import User, UserSignup, UserLogin, Category
 from services.categorization import CategorizationService
 from services.pesadb_service import db_service
+from utils.auth import create_access_token, get_current_user
 import bcrypt
 import logging
 import json
@@ -61,19 +62,37 @@ async def signup(user_data: UserSignup):
 
         logger.info(f"✅ User created successfully - ID: {user_id}, Email: {user.email}, Categories: {categories_created}")
 
+        # Generate JWT token
+        access_token = create_access_token(user_id=user_id, email=user.email)
+
         return {
             "message": "Signup successful",
             "user_id": user_id,
             "email": user.email,
             "name": user.name,
-            "categories": categories_created
+            "categories": categories_created,
+            "access_token": access_token,
+            "token_type": "bearer"
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during signup: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error during signup: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error during signup: {error_msg}", exc_info=True)
+
+        # Check if it's a schema-related error
+        if 'column' in error_msg.lower() and ('email' in error_msg.lower() or 'password' in error_msg.lower()):
+            logger.error("❌ SCHEMA ERROR DETECTED: Database schema is incorrect!")
+            logger.error("   The 'users' table is missing required columns (email/password_hash)")
+            logger.error("   🔧 Fix: Restart the backend server to reinitialize the database")
+            logger.error("   Or run: python backend/scripts/init_database.py")
+            raise HTTPException(
+                status_code=500,
+                detail="Database schema error. Please contact administrator to reinitialize the database."
+            )
+
+        raise HTTPException(status_code=500, detail=f"Error during signup: {error_msg}")
 
 @router.post("/login")
 async def login(login_data: UserLogin):
@@ -98,18 +117,36 @@ async def login(login_data: UserLogin):
 
         logger.info(f"✅ Login successful - User ID: {user_doc['id']}, Email: {user_doc['email']}")
 
+        # Generate JWT token
+        access_token = create_access_token(user_id=user_doc["id"], email=user_doc["email"])
+
         return {
             "message": "Login successful",
             "user_id": user_doc["id"],
             "email": user_doc["email"],
-            "name": user_doc.get("name")
+            "name": user_doc.get("name"),
+            "access_token": access_token,
+            "token_type": "bearer"
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during login: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error during login: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error during login: {error_msg}", exc_info=True)
+
+        # Check if it's a schema-related error
+        if 'column' in error_msg.lower() and ('email' in error_msg.lower() or 'password' in error_msg.lower()):
+            logger.error("❌ SCHEMA ERROR DETECTED: Database schema is incorrect!")
+            logger.error("   The 'users' table is missing required columns (email/password_hash)")
+            logger.error("   🔧 Fix: Restart the backend server to reinitialize the database")
+            logger.error("   Or run: python backend/scripts/init_database.py")
+            raise HTTPException(
+                status_code=500,
+                detail="Database schema error. Please contact administrator to reinitialize the database."
+            )
+
+        raise HTTPException(status_code=500, detail=f"Error during login: {error_msg}")
 
 @router.get("/user-status")
 async def get_user_status():
@@ -128,21 +165,15 @@ async def get_user_status():
         raise HTTPException(status_code=500, detail=f"Error checking user status: {str(e)}")
 
 @router.get("/me")
-async def get_current_user(user_id: str):
-    """Get current user details"""
+async def get_current_user_details(current_user: dict = Depends(get_current_user)):
+    """Get current authenticated user details"""
     try:
-        user_doc = await db_service.get_user_by_id(user_id)
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-
         return {
-            "user_id": user_doc["id"],
-            "email": user_doc["email"],
-            "name": user_doc.get("name"),
-            "preferences": user_doc.get("preferences", {})
+            "user_id": current_user["id"],
+            "email": current_user["email"],
+            "name": current_user.get("name"),
+            "preferences": current_user.get("preferences", {})
         }
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error fetching user: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")

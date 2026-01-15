@@ -190,7 +190,7 @@ async def startup_db_initialization():
                 f"Default user {'created' if result.get('user_created') else 'already exists'}"
             )
             if result.get('user_created'):
-                logger.warning("⚠️  Default user created with PIN '0000' - please change during first login")
+                logger.warning("⚠️  Default user created with email='admin@example.com' and password='admin123' - please change during first login")
         else:
             logger.error(f"❌ Database initialization failed: {result['message']}")
             if result.get('errors'):

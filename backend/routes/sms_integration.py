@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from models.transaction import Transaction, TransactionCreate, SMSParseRequest, SMSImportRequest, SMSImportResponse, SMSMetadata
 from models.user import Category
 from services.mpesa_parser import MPesaParser
@@ -6,6 +6,7 @@ from services.enhanced_sms_parser import EnhancedSMSParser
 from services.duplicate_detector import DuplicateDetector
 from services.categorization import CategorizationService
 from services.pesadb_service import db_service
+from utils.auth import get_current_user, get_current_user_optional
 from typing import List, Dict, Any
 import uuid
 from datetime import datetime
@@ -13,7 +14,10 @@ from datetime import datetime
 router = APIRouter(prefix="/sms", tags=["sms-integration"])
 
 @router.post("/parse", response_model=Dict[str, Any])
-async def parse_single_sms(request: SMSParseRequest):
+async def parse_single_sms(
+    request: SMSParseRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """Parse a single SMS message and return transaction details"""
     try:
         print(f"DEBUG: Received message: {repr(request.message)}")
@@ -25,11 +29,11 @@ async def parse_single_sms(request: SMSParseRequest):
         parsed_data = MPesaParser.parse_message(request.message)
         if not parsed_data:
             raise HTTPException(status_code=400, detail="Message could not be parsed as M-Pesa transaction")
-        
+
         # Get categories for auto-categorization
         categories_data = await db_service.get_categories(limit=100)
         categories = [Category(**{**cat, "id": cat.get("id")}) for cat in categories_data]
-        
+
         # Auto-categorize if needed
         if parsed_data['suggested_category']:
             category_match = next((c for c in categories if c.name == parsed_data['suggested_category']), None)
@@ -37,9 +41,8 @@ async def parse_single_sms(request: SMSParseRequest):
                 parsed_data['suggested_category_id'] = category_match.id
 
         # Also provide enhanced transaction breakdown preview
-        user_data = await db_service.get_user()
-        if user_data:
-            user_id = user_data["id"]
+        if current_user:
+            user_id = current_user["id"]
 
             # Create category mapping for enhanced parser
             category_mapping = {}
@@ -79,16 +82,13 @@ async def parse_single_sms(request: SMSParseRequest):
 @router.post("/import", response_model=SMSImportResponse)
 async def import_sms_messages(
     import_request: SMSImportRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
 ):
     """Import multiple SMS messages as transactions"""
     try:
-        # Get user (for demo, use first user)
-        user_data = await db_service.get_user()
-        if not user_data:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_data["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Get categories
         categories_data = await db_service.get_categories(limit=100)
@@ -235,15 +235,14 @@ async def get_import_status(import_session_id: str):
         raise HTTPException(status_code=500, detail=f"Error getting import status: {str(e)}")
 
 @router.get("/duplicate-stats")
-async def get_duplicate_statistics(days: int = 30):
+async def get_duplicate_statistics(
+    days: int = 30,
+    current_user: dict = Depends(get_current_user)
+):
     """Get duplicate detection statistics"""
     try:
-        # Get user (for demo, use first user)
-        user_data = await db_service.get_user()
-        if not user_data:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_data["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         stats = await DuplicateDetector.get_duplicate_statistics(user_id, days)
         return stats
@@ -254,16 +253,13 @@ async def get_duplicate_statistics(days: int = 30):
 @router.post("/create-transaction")
 async def create_transaction_from_parsed_sms(
     parsed_data: Dict[str, Any],
-    category_id: str
+    category_id: str,
+    current_user: dict = Depends(get_current_user)
 ):
     """Create a transaction from already parsed SMS data"""
     try:
-        # Get user (for demo, use first user)
-        user_data = await db_service.get_user()
-        if not user_data:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_data["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Verify category exists
         category_data = await db_service.get_category_by_id(category_id)

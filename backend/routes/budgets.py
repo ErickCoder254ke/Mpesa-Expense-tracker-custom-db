@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from models.budget import Budget, BudgetCreate, BudgetUpdate
 from models.user import Category
 from services.budget_monitoring import BudgetMonitoringService
 from services.pesadb_service import db_service
+from utils.auth import get_current_user
 from typing import List, Optional
 from datetime import datetime, timedelta
 import calendar
@@ -13,15 +14,12 @@ router = APIRouter(prefix="/budgets", tags=["budgets"])
 async def get_budgets_with_progress(
     month: int = Query(..., ge=1, le=12),
     year: int = Query(..., ge=2020, le=2030),
+    current_user: dict = Depends(get_current_user)
 ):
     """Get budgets for a specific month with spending progress"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Get budgets for the specified month/year
         budgets_docs = await db_service.get_budgets(
@@ -109,15 +107,14 @@ async def get_budgets_with_progress(
         raise HTTPException(status_code=500, detail=f"Error fetching budgets: {str(e)}")
 
 @router.post("/", response_model=Budget)
-async def create_budget(budget_data: BudgetCreate):
+async def create_budget(
+    budget_data: BudgetCreate,
+    current_user: dict = Depends(get_current_user)
+):
     """Create a new budget"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Verify category exists
         category_doc = await db_service.get_category_by_id(budget_data.category_id)
@@ -193,13 +190,11 @@ async def delete_budget(budget_id: str):
 async def get_budget_summary(
     month: int = Query(..., ge=1, le=12),
     year: int = Query(..., ge=2020, le=2030),
+    current_user: dict = Depends(get_current_user)
 ):
     """Get overall budget summary for a month"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
+        # Use authenticated user
         
         user_id = user_doc["id"]
         

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from models.transaction import Transaction, TransactionCreate, TransactionUpdate
 from models.user import Category
 from services.categorization import CategorizationService
 from services.frequency_analyzer import TransactionFrequencyAnalyzer, FrequentTransaction
 from services.pesadb_service import db_service
+from utils.auth import get_current_user
 from typing import List, Optional, Literal
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -19,15 +20,12 @@ async def get_transactions(
     category_id: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
 ):
     """Get transactions with optional filters"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Convert datetime to string if needed
         start_date_str = start_date.isoformat() if start_date else None
@@ -55,15 +53,14 @@ async def get_transactions(
         raise HTTPException(status_code=500, detail=f"Error fetching transactions: {str(e)}")
 
 @router.post("/", response_model=Transaction)
-async def create_transaction(transaction_data: TransactionCreate):
+async def create_transaction(
+    transaction_data: TransactionCreate,
+    current_user: dict = Depends(get_current_user)
+):
     """Create a new transaction"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Auto-categorize if category_id is "auto"
         category_id = transaction_data.category_id
@@ -129,15 +126,15 @@ async def get_transaction(transaction_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching transaction: {str(e)}")
 
 @router.put("/{transaction_id}", response_model=Transaction)
-async def update_transaction(transaction_id: str, update_data: TransactionUpdate):
+async def update_transaction(
+    transaction_id: str,
+    update_data: TransactionUpdate,
+    current_user: dict = Depends(get_current_user)
+):
     """Update a transaction"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Get existing transaction
         existing_doc = await db_service.get_transaction_by_id(transaction_id, user_id)
@@ -171,15 +168,14 @@ async def update_transaction(transaction_id: str, update_data: TransactionUpdate
         raise HTTPException(status_code=500, detail=f"Error updating transaction: {str(e)}")
 
 @router.delete("/{transaction_id}")
-async def delete_transaction(transaction_id: str):
+async def delete_transaction(
+    transaction_id: str,
+    current_user: dict = Depends(get_current_user)
+):
     """Delete a transaction"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         await db_service.delete_transaction(transaction_id, user_id)
         
@@ -193,15 +189,12 @@ async def delete_transaction(transaction_id: str):
 async def get_analytics_summary(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    current_user: dict = Depends(get_current_user)
 ):
     """Get analytics summary for dashboard"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Default to current month if no dates provided
         if not start_date:
@@ -300,15 +293,12 @@ async def get_transaction_charges_analytics(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     period: str = Query("month", regex="^(week|month|quarter|year)$"),
+    current_user: dict = Depends(get_current_user)
 ):
     """Get comprehensive transaction charges analytics"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
         
         # Default to current period if no dates provided
         if not start_date or not end_date:
@@ -449,15 +439,12 @@ async def get_frequent_transactions(
     min_frequency: int = Query(3, ge=2, le=10),
     days_back: int = Query(90, ge=7, le=365),
     uncategorized_only: bool = Query(True),
+    current_user: dict = Depends(get_current_user)
 ):
     """Get frequently occurring transactions that may need categorization"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
 
         # Initialize frequency analyzer (it will need migration too)
         # For now, return empty results
@@ -475,15 +462,14 @@ async def get_frequent_transactions(
         raise HTTPException(status_code=500, detail=f"Error analyzing transaction frequency: {str(e)}")
 
 @router.post("/frequency-analysis/categorize")
-async def categorize_frequent_pattern(request: CategoryUpdateRequest):
+async def categorize_frequent_pattern(
+    request: CategoryUpdateRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """Apply a category to all transactions matching a frequent pattern"""
     try:
-        # Get user (for demo, use first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        user_id = user_doc["id"]
+        # Use authenticated user
+        user_id = current_user["id"]
 
         # Verify category exists
         category_doc = await db_service.get_category_by_id(request.category_id)
@@ -510,7 +496,10 @@ async def categorize_frequent_pattern(request: CategoryUpdateRequest):
         raise HTTPException(status_code=500, detail=f"Error categorizing pattern: {str(e)}")
 
 @router.post("/frequency-analysis/review")
-async def review_frequent_pattern(request: PatternReviewRequest):
+async def review_frequent_pattern(
+    request: PatternReviewRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """Mark a frequent transaction pattern as reviewed"""
     try:
         # Get user (for demo, use first user)

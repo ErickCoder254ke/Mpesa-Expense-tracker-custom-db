@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 class DatabaseInitializer:
     """Service for automatic database initialization"""
 
+    # Schema version - increment when schema changes
+    SCHEMA_VERSION = "2.0.0"  # 2.0.0 = Email/Password authentication
+    # Previous: 1.0.0 = PIN-based authentication (deprecated)
+
     @staticmethod
     async def ensure_database_exists() -> bool:
         """
@@ -309,6 +313,8 @@ class DatabaseInitializer:
         errors = []
 
         logger.warning("⚠️  Using fallback inline schema creation")
+        logger.warning("⚠️  IMPORTANT: Ensure inline schema matches init_pesadb.sql file!")
+        logger.warning(f"⚠️  Schema Version: {DatabaseInitializer.SCHEMA_VERSION}")
 
         # Define table creation statements
         # Note: PesaDB doesn't support IF NOT EXISTS, DEFAULT, or NOT NULL in CREATE TABLE
@@ -319,9 +325,9 @@ class DatabaseInitializer:
                 "users",
                 """CREATE TABLE users (
     id STRING PRIMARY KEY,
-    pin_hash STRING,
-    security_question STRING,
-    security_answer_hash STRING,
+    email STRING,
+    password_hash STRING,
+    name STRING,
     created_at STRING,
     preferences STRING
 )"""
@@ -400,8 +406,11 @@ class DatabaseInitializer:
     message_hash STRING,
     mpesa_transaction_id STRING,
     reason STRING,
+    duplicate_reasons STRING,
+    duplicate_confidence FLOAT,
     similarity_score FLOAT,
-    detected_at STRING
+    detected_at STRING,
+    action_taken STRING
 )"""
             ),
             # Status Checks table
@@ -590,15 +599,16 @@ class DatabaseInitializer:
 
             logger.info("📝 Creating default user...")
 
-            # Create default user with PIN "0000" (user should change this)
-            default_pin = "0000"
-            pin_hash = bcrypt.hashpw(default_pin.encode('utf-8'), bcrypt.gensalt())
+            # Create default user with email "admin@example.com" and password "admin123"
+            default_email = "admin@example.com"
+            default_password = "admin123"
+            password_hash = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt())
 
             user_data = {
                 'id': str(uuid.uuid4()),
-                'pin_hash': pin_hash.decode('utf-8'),
-                'security_question': 'What is your favorite color?',
-                'security_answer_hash': None,  # User should set this during first login
+                'email': default_email,
+                'password_hash': password_hash.decode('utf-8'),
+                'name': 'Admin User',
                 'created_at': datetime.utcnow().isoformat(),
                 'preferences': '{"default_currency": "KES", "is_default": true}'
             }
@@ -606,7 +616,7 @@ class DatabaseInitializer:
             await db_service.create_user(user_data)
 
             logger.info(f"✅ Default user created with ID: {user_data['id']}")
-            logger.warning("⚠️  Default PIN is '0000' - user should change this during first login")
+            logger.warning("⚠️  Default credentials: email='admin@example.com', password='admin123' - user should change this during first login")
 
             return {
                 'created': True,
