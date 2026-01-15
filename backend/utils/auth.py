@@ -5,7 +5,7 @@ import os
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from fastapi import HTTPException, Security, Depends
+from fastapi import HTTPException, Security, Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from services.pesadb_service import db_service
 import logging
@@ -112,22 +112,45 @@ async def get_current_user(
     return user
 
 
+async def _get_credentials_optional(
+    authorization: Optional[str] = None
+) -> Optional[HTTPAuthorizationCredentials]:
+    """
+    Helper to extract optional credentials from Authorization header
+    Compatible with FastAPI 0.110+
+    """
+    if not authorization:
+        return None
+
+    try:
+        scheme, credentials = authorization.split()
+        if scheme.lower() != "bearer":
+            return None
+        return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
+    except ValueError:
+        return None
+
+
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(security, auto_error=False)
+    authorization: Optional[str] = Header(None)
 ) -> Optional[Dict[str, Any]]:
     """
     FastAPI dependency to get the current user if token is provided
     Returns None if no token is provided (for optional authentication)
-    
+
+    Compatible with FastAPI 0.110+ (no auto_error parameter)
+
     Args:
-        credentials: Optional HTTP Bearer token credentials
-    
+        authorization: Optional Authorization header value
+
     Returns:
         User document from database or None
     """
+    credentials = await _get_credentials_optional(authorization)
+
     if not credentials:
         return None
-    
+
     try:
         return await get_current_user(credentials)
     except HTTPException:
