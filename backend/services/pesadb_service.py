@@ -73,10 +73,19 @@ class PesaDBService:
 
     @staticmethod
     async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-        """Get user by email address"""
+        """
+        Get user by email address
+
+        Note: Emails are stored in lowercase, so we normalize the query email to lowercase.
+        PesaDB doesn't support LOWER() function, so we rely on lowercase storage.
+        """
         try:
-            email_escaped = escape_string(email.lower())
-            result = await query_db(f"SELECT * FROM users WHERE LOWER(email) = {email_escaped} LIMIT 1")
+            # Normalize email to lowercase (emails are stored lowercase)
+            normalized_email = email.lower()
+            email_escaped = escape_string(normalized_email)
+
+            # Simple equality check (no LOWER function needed since stored lowercase)
+            result = await query_db(f"SELECT * FROM users WHERE email = {email_escaped} LIMIT 1")
             return result[0] if result else None
         except Exception as e:
             if is_table_not_found_error(e):
