@@ -180,10 +180,9 @@ class BudgetMonitoringService:
             MIN(amount) as min_transaction
         FROM transactions
         WHERE user_id = '{user_id}'
-        AND category_id = '{category_id}'
-        AND type = 'expense'
-        AND date >= '{start_str}'
-        AND date <= '{end_str}'
+          AND category_id = '{category_id}'
+          AND type = 'expense'
+          AND date BETWEEN '{start_str}' AND '{end_str}'
         """
         
         total_result = await query_db(total_query)
@@ -208,10 +207,9 @@ class BudgetMonitoringService:
             COUNT(*) as daily_count
         FROM transactions
         WHERE user_id = '{user_id}'
-        AND category_id = '{category_id}'
-        AND type = 'expense'
-        AND date >= '{start_str}'
-        AND date <= '{end_str}'
+          AND category_id = '{category_id}'
+          AND type = 'expense'
+          AND date BETWEEN '{start_str}' AND '{end_str}'
         GROUP BY date
         ORDER BY date ASC
         """

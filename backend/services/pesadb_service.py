@@ -331,13 +331,12 @@ class PesaDBService:
         """Find similar transactions (for duplicate detection)"""
         amount_min = amount - 1
         amount_max = amount + 1
-        
+
         result = await query_db(f"""
         SELECT * FROM transactions
         WHERE user_id = '{user_id}'
-        AND amount >= {amount_min}
-        AND amount <= {amount_max}
-        AND created_at >= '{cutoff_time}'
+          AND amount BETWEEN {amount_min} AND {amount_max}
+          AND created_at >= '{cutoff_time}'
         LIMIT {limit}
         """)
         
@@ -537,10 +536,9 @@ class PesaDBService:
         SELECT SUM(amount) as total
         FROM transactions
         WHERE user_id = '{user_id}'
-        AND category_id = '{category_id}'
-        AND type = 'expense'
-        AND date >= '{start_date}'
-        AND date <= '{end_date}'
+          AND category_id = '{category_id}'
+          AND type = 'expense'
+          AND date BETWEEN '{start_date}' AND '{end_date}'
         """)
         
         return float(result[0]['total']) if result and result[0].get('total') else 0.0
@@ -590,14 +588,13 @@ class PesaDBService:
         # Note: Date extraction functions may vary by SQL dialect
         # This is a simplified version that groups by the date string
         result = await query_db(f"""
-        SELECT 
+        SELECT
             date,
             SUM(amount) as total
         FROM transactions
         WHERE user_id = '{user_id}'
-        AND type = 'expense'
-        AND date >= '{start_date}'
-        AND date <= '{end_date}'
+          AND type = 'expense'
+          AND date BETWEEN '{start_date}' AND '{end_date}'
         GROUP BY date
         ORDER BY date ASC
         """)

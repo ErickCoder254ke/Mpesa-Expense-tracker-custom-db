@@ -109,8 +109,11 @@ CREATE TABLE duplicate_logs (
     message_hash STRING,
     mpesa_transaction_id STRING,
     reason STRING,
+    duplicate_reasons STRING,
+    duplicate_confidence FLOAT,
     similarity_score FLOAT,
-    detected_at STRING
+    detected_at STRING,
+    action_taken STRING
 );
 
 -- ============================================================================

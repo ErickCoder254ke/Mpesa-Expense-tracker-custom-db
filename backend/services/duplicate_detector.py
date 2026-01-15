@@ -180,21 +180,31 @@ class DuplicateDetector:
     async def log_duplicate_attempt(
         user_id: str,
         message_hash: str,
-        duplicate_info: Dict[str, Any]
+        duplicate_info: Dict[str, Any],
+        original_transaction_id: Optional[str] = None,
+        duplicate_transaction_id: Optional[str] = None,
+        mpesa_transaction_id: Optional[str] = None
     ):
         """
         Log duplicate detection attempt for analysis
         """
+        reasons_str = ",".join(duplicate_info["reasons"])  # Store as comma-separated string
+
         log_entry = {
             "id": f"dup_{datetime.utcnow().timestamp()}_{message_hash[:8]}",
             "user_id": user_id,
+            "original_transaction_id": original_transaction_id or "",
+            "duplicate_transaction_id": duplicate_transaction_id or "",
             "message_hash": message_hash,
+            "mpesa_transaction_id": mpesa_transaction_id or "",
+            "reason": reasons_str,  # Legacy field - same as duplicate_reasons
+            "duplicate_reasons": reasons_str,  # New field for clarity
             "duplicate_confidence": duplicate_info["confidence"],
-            "duplicate_reasons": ",".join(duplicate_info["reasons"]),  # Store as comma-separated string
+            "similarity_score": duplicate_info.get("similarity_score", duplicate_info["confidence"]),
             "detected_at": datetime.utcnow().isoformat(),
             "action_taken": "blocked" if duplicate_info["is_duplicate"] else "allowed"
         }
-        
+
         await db_service.create_duplicate_log(log_entry)
     
     @staticmethod
