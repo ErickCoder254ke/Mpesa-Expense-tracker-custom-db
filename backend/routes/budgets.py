@@ -195,8 +195,7 @@ async def get_budget_summary(
     """Get overall budget summary for a month"""
     try:
         # Use authenticated user
-        
-        user_id = user_doc["id"]
+        user_id = current_user["id"]
         
         # Calculate date range for the month
         start_date = datetime(year, month, 1)
