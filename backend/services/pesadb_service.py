@@ -70,6 +70,18 @@ class PesaDBService:
             if is_table_not_found_error(e):
                 return None
             raise
+
+    @staticmethod
+    async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+        """Get user by email address"""
+        try:
+            email_escaped = escape_string(email.lower())
+            result = await query_db(f"SELECT * FROM users WHERE LOWER(email) = {email_escaped} LIMIT 1")
+            return result[0] if result else None
+        except Exception as e:
+            if is_table_not_found_error(e):
+                return None
+            raise
     
     @staticmethod
     async def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:

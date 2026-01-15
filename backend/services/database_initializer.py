@@ -42,10 +42,11 @@ class DatabaseInitializer:
             return True
 
         except Exception as e:
-            logger.error(f"❌ Error ensuring database exists: {str(e)}")
+            logger.error(f"❌ Error ensuring database exists: {str(e)}", exc_info=True)
             # Don't fail completely - maybe the API doesn't support listing/creating databases
-            # and the database already exists
-            logger.warning("⚠️  Continuing anyway - database might already exist")
+            # and the database already exists - but log the full details
+            logger.warning(f"⚠️  Continuing anyway - database might already exist or API has limited permissions")
+            logger.debug(f"Database check exception details: {type(e).__name__}: {str(e)}")
             return True
 
     @staticmethod

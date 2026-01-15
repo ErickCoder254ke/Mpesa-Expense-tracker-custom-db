@@ -15,11 +15,11 @@ async def signup(user_data: UserSignup):
     try:
         logger.info(f"Signup request received for email: {user_data.email}")
 
-        # Check if user already exists with this email
-        existing_users = await db_service.get_all_users()
-        for existing_user in existing_users:
-            if existing_user.get('email', '').lower() == user_data.email.lower():
-                raise HTTPException(status_code=400, detail="User with this email already exists")
+        # Check if user already exists with this email - using efficient lookup
+        existing_user = await db_service.get_user_by_email(user_data.email)
+        if existing_user:
+            logger.warning(f"Signup failed: Email already exists - {user_data.email}")
+            raise HTTPException(status_code=400, detail="User with this email already exists")
 
         # Hash the password
         password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
@@ -38,23 +38,35 @@ async def signup(user_data: UserSignup):
         await db_service.create_user(user_data_dict)
         user_id = user.id
 
-        # Create default categories for the user
-        default_categories = CategorizationService.get_default_categories()
-        categories = []
-        for cat_data in default_categories:
-            category = Category(**cat_data)
-            category_dict = category.dict()
-            await db_service.create_category(category_dict)
-            categories.append(category)
+        # Create default categories for the user (only if none exist yet)
+        existing_categories = await db_service.get_categories(limit=10)
+        categories_created = 0
 
-        logger.info(f"User created successfully: {user_id}")
+        if len(existing_categories) == 0:
+            # No categories exist, create default ones
+            default_categories = CategorizationService.get_default_categories()
+            for cat_data in default_categories:
+                try:
+                    category = Category(**cat_data)
+                    category_dict = category.dict()
+                    await db_service.create_category(category_dict)
+                    categories_created += 1
+                except Exception as cat_error:
+                    logger.warning(f"Failed to create category {cat_data.get('name')}: {str(cat_error)}")
+
+            logger.info(f"✅ Created {categories_created} default categories")
+        else:
+            logger.info(f"✅ Using existing {len(existing_categories)} categories")
+            categories_created = len(existing_categories)
+
+        logger.info(f"✅ User created successfully - ID: {user_id}, Email: {user.email}, Categories: {categories_created}")
 
         return {
             "message": "Signup successful",
             "user_id": user_id,
             "email": user.email,
             "name": user.name,
-            "categories": len(categories)
+            "categories": categories_created
         }
 
     except HTTPException:
@@ -69,28 +81,23 @@ async def login(login_data: UserLogin):
     try:
         logger.info(f"Login request received for email: {login_data.email}")
 
-        # Get all users and find by email
-        users = await db_service.get_all_users()
-        user_doc = None
-        for user in users:
-            if user.get('email', '').lower() == login_data.email.lower():
-                user_doc = user
-                break
-        
+        # Get user by email - using efficient lookup
+        user_doc = await db_service.get_user_by_email(login_data.email)
+
         if not user_doc:
-            logger.warning(f"User not found: {login_data.email}")
+            logger.warning(f"Login failed: User not found - {login_data.email}")
             raise HTTPException(status_code=401, detail="Invalid email or password")
         
         # Verify password
         stored_hash = user_doc["password_hash"].encode('utf-8')
         is_valid = bcrypt.checkpw(login_data.password.encode('utf-8'), stored_hash)
-        
+
         if not is_valid:
-            logger.warning(f"Invalid password for user: {login_data.email}")
+            logger.warning(f"Login failed: Invalid password for user - {login_data.email}")
             raise HTTPException(status_code=401, detail="Invalid email or password")
-        
-        logger.info(f"Login successful for user: {user_doc['id']}")
-        
+
+        logger.info(f"✅ Login successful - User ID: {user_doc['id']}, Email: {user_doc['email']}")
+
         return {
             "message": "Login successful",
             "user_id": user_doc["id"],
