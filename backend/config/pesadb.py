@@ -90,30 +90,46 @@ class PesaDBClient:
 
         db = database or self.config.database
         url = f"{self.config.api_url}/query"
-        
+
         payload = {
             'sql': sql,
             'db': db
         }
-        
+
+        # DEBUG: Log the exact SQL being sent
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"🔍 PesaDB Query - SQL: {sql}")
+        logger.debug(f"🔍 PesaDB Query - Database: {db}")
+        logger.debug(f"🔍 PesaDB Query - Payload: {payload}")
+
         try:
             async with self.session.post(
-                url, 
+                url,
                 headers=self.config.get_headers(),
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
                 result = await response.json()
-                
+
+                logger.debug(f"🔍 PesaDB Response: {result}")
+
                 if not result.get('success'):
                     error_msg = result.get('error', 'Database query failed')
+                    logger.error(f"❌ PesaDB Error - SQL: {sql}")
+                    logger.error(f"❌ PesaDB Error - Message: {error_msg}")
+                    logger.error(f"❌ PesaDB Error - Full Response: {result}")
                     raise Exception(f"PesaDB Error: {error_msg}")
-                
+
                 return result.get('data', [])
-        
+
         except aiohttp.ClientError as e:
+            logger.error(f"❌ PesaDB Connection Error - SQL: {sql}")
+            logger.error(f"❌ PesaDB Connection Error - Message: {str(e)}")
             raise Exception(f"PesaDB Connection Error: {str(e)}")
         except Exception as e:
+            logger.error(f"❌ PesaDB Query Error - SQL: {sql}")
+            logger.error(f"❌ PesaDB Query Error - Message: {str(e)}")
             raise Exception(f"PesaDB Query Error: {str(e)}")
     
     async def execute(self, sql: str, database: Optional[str] = None) -> bool:

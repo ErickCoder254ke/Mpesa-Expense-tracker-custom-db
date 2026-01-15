@@ -505,7 +505,7 @@ class DatabaseInitializer:
                     safe_name = name.replace("'", "''")
                     sql = f"""
                     INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
-                    VALUES ('{cat_id}', NULL, '{safe_name}', '{icon}', '{color}', '{keywords}', TRUE)
+                    VALUES ('{cat_id}', 'system', '{safe_name}', '{icon}', '{color}', '{keywords}', TRUE)
                     """
                     await execute_db(sql)
                     seeded_count += 1

@@ -1,86 +1,34 @@
 from fastapi import APIRouter, HTTPException
-from models.user import User, UserCreate, UserVerify, Category, SecurityAnswerVerify, PINReset
+from models.user import User, UserSignup, UserLogin, Category
 from services.categorization import CategorizationService
 from services.pesadb_service import db_service
 import bcrypt
-import os
+import logging
+import json
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
-@router.post("/setup-pin")
-async def setup_pin(user_data: UserCreate):
-    """Setup PIN for new user and create default categories"""
-    import logging
-    import json
-    logger = logging.getLogger(__name__)
-
+@router.post("/signup")
+async def signup(user_data: UserSignup):
+    """Register a new user"""
     try:
-        logger.info(f"Setup PIN request received")
+        logger.info(f"Signup request received for email: {user_data.email}")
 
-        # Check if user already exists (for demo, we'll use a single user)
-        logger.info("Checking for existing user...")
-        user_count = await db_service.get_user_count()
-        logger.info(f"Existing user check complete: {user_count > 0}")
+        # Check if user already exists with this email
+        existing_users = await db_service.get_all_users()
+        for existing_user in existing_users:
+            if existing_user.get('email', '').lower() == user_data.email.lower():
+                raise HTTPException(status_code=400, detail="User with this email already exists")
 
-        if user_count > 0:
-            # Check if the existing user is a default user (has is_default preference)
-            existing_user = await db_service.get_user()
-            if existing_user:
-                preferences = existing_user.get('preferences', '{}')
-                if isinstance(preferences, str):
-                    preferences = json.loads(preferences)
-
-                # If it's a default user, allow updating the PIN
-                if preferences.get('is_default'):
-                    logger.info("Updating default user with new PIN...")
-
-                    # Hash the new PIN
-                    pin_hash = bcrypt.hashpw(user_data.pin.encode('utf-8'), bcrypt.gensalt())
-
-                    # Hash security answer if provided
-                    security_answer_hash = None
-                    if user_data.security_answer:
-                        normalized_answer = user_data.security_answer.lower().strip()
-                        security_answer_hash = bcrypt.hashpw(normalized_answer.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-                    # Update user PIN and remove default flag
-                    await db_service.update_user_pin(existing_user['id'], pin_hash.decode('utf-8'))
-
-                    # Update preferences to remove default flag
-                    from config.pesadb import build_update, execute_db
-                    update_data = {
-                        'security_question': user_data.security_question,
-                        'security_answer_hash': security_answer_hash,
-                        'preferences': json.dumps({"default_currency": "KES", "is_default": False})
-                    }
-                    sql = build_update('users', update_data, f"id = '{existing_user['id']}'")
-                    await execute_db(sql)
-
-                    logger.info("Default user updated successfully")
-
-                    return {
-                        "message": "PIN setup successful (default user updated)",
-                        "user_id": existing_user['id'],
-                        "categories": await db_service.count_categories()
-                    }
-                else:
-                    raise HTTPException(status_code=400, detail="User already exists")
-
-        # Hash the PIN
-        pin_hash = bcrypt.hashpw(user_data.pin.encode('utf-8'), bcrypt.gensalt())
-
-        # Hash security answer if provided
-        security_answer_hash = None
-        if user_data.security_answer:
-            # Normalize answer: lowercase and strip whitespace
-            normalized_answer = user_data.security_answer.lower().strip()
-            security_answer_hash = bcrypt.hashpw(normalized_answer.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        # Hash the password
+        password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
 
         # Create user
         user = User(
-            pin_hash=pin_hash.decode('utf-8'),
-            security_question=user_data.security_question,
-            security_answer_hash=security_answer_hash,
+            email=user_data.email.lower(),
+            password_hash=password_hash.decode('utf-8'),
+            name=user_data.name,
             preferences={"default_currency": "KES"}
         )
 
@@ -90,7 +38,7 @@ async def setup_pin(user_data: UserCreate):
         await db_service.create_user(user_data_dict)
         user_id = user.id
 
-        # Create default categories
+        # Create default categories for the user
         default_categories = CategorizationService.get_default_categories()
         categories = []
         for cat_data in default_categories:
@@ -99,141 +47,95 @@ async def setup_pin(user_data: UserCreate):
             await db_service.create_category(category_dict)
             categories.append(category)
 
+        logger.info(f"User created successfully: {user_id}")
+
         return {
-            "message": "PIN setup successful",
+            "message": "Signup successful",
             "user_id": user_id,
+            "email": user.email,
+            "name": user.name,
             "categories": len(categories)
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error setting up PIN: {str(e)}", exc_info=True)
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Error setting up PIN: {str(e)}")
+        logger.error(f"Error during signup: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error during signup: {str(e)}")
 
-@router.post("/verify-pin")
-async def verify_pin(verify_data: UserVerify):
-    """Verify user PIN"""
+@router.post("/login")
+async def login(login_data: UserLogin):
+    """Login user with email and password"""
     try:
-        # Get user (for demo, get the first user)
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found. Please setup PIN first.")
+        logger.info(f"Login request received for email: {login_data.email}")
+
+        # Get all users and find by email
+        users = await db_service.get_all_users()
+        user_doc = None
+        for user in users:
+            if user.get('email', '').lower() == login_data.email.lower():
+                user_doc = user
+                break
         
-        # Verify PIN
-        stored_hash = user_doc["pin_hash"].encode('utf-8')
-        is_valid = bcrypt.checkpw(verify_data.pin.encode('utf-8'), stored_hash)
+        if not user_doc:
+            logger.warning(f"User not found: {login_data.email}")
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Verify password
+        stored_hash = user_doc["password_hash"].encode('utf-8')
+        is_valid = bcrypt.checkpw(login_data.password.encode('utf-8'), stored_hash)
         
         if not is_valid:
-            raise HTTPException(status_code=401, detail="Invalid PIN")
+            logger.warning(f"Invalid password for user: {login_data.email}")
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        logger.info(f"Login successful for user: {user_doc['id']}")
         
         return {
-            "message": "PIN verified successfully",
-            "user_id": user_doc["id"]
+            "message": "Login successful",
+            "user_id": user_doc["id"],
+            "email": user_doc["email"],
+            "name": user_doc.get("name")
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error verifying PIN: {str(e)}")
+        logger.error(f"Error during login: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error during login: {str(e)}")
 
 @router.get("/user-status")
 async def get_user_status():
-    """Check if user exists and has PIN setup"""
+    """Check if any user exists"""
     try:
-        user_doc = await db_service.get_user()
+        user_count = await db_service.get_user_count()
         categories_count = await db_service.count_categories()
 
         return {
-            "has_user": user_doc is not None,
-            "user_id": user_doc["id"] if user_doc else None,
+            "has_user": user_count > 0,
+            "user_count": user_count,
             "categories_count": categories_count
         }
     except Exception as e:
+        logger.error(f"Error checking user status: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error checking user status: {str(e)}")
 
-@router.get("/security-question")
-async def get_security_question():
-    """Get the security question for PIN reset"""
+@router.get("/me")
+async def get_current_user(user_id: str):
+    """Get current user details"""
     try:
-        user_doc = await db_service.get_user()
+        user_doc = await db_service.get_user_by_id(user_id)
         if not user_doc:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if not user_doc.get("security_question"):
-            raise HTTPException(status_code=404, detail="No security question set for this account")
-
         return {
-            "question": user_doc["security_question"]
+            "user_id": user_doc["id"],
+            "email": user_doc["email"],
+            "name": user_doc.get("name"),
+            "preferences": user_doc.get("preferences", {})
         }
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching security question: {str(e)}")
-
-@router.post("/verify-security-answer")
-async def verify_security_answer(verify_data: SecurityAnswerVerify):
-    """Verify the security answer for PIN reset"""
-    try:
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        if not user_doc.get("security_answer_hash"):
-            raise HTTPException(status_code=404, detail="No security answer set for this account")
-
-        # Normalize the provided answer
-        normalized_answer = verify_data.answer.lower().strip()
-        stored_hash = user_doc["security_answer_hash"].encode('utf-8')
-
-        is_valid = bcrypt.checkpw(normalized_answer.encode('utf-8'), stored_hash)
-
-        if not is_valid:
-            raise HTTPException(status_code=401, detail="Incorrect security answer")
-
-        return {
-            "message": "Security answer verified successfully"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error verifying security answer: {str(e)}")
-
-@router.post("/reset-pin")
-async def reset_pin(reset_data: PINReset):
-    """Reset user PIN after security verification"""
-    try:
-        user_doc = await db_service.get_user()
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        # Verify security answer again
-        if not user_doc.get("security_answer_hash"):
-            raise HTTPException(status_code=400, detail="No security answer set for this account")
-
-        normalized_answer = reset_data.security_answer.lower().strip()
-        stored_hash = user_doc["security_answer_hash"].encode('utf-8')
-
-        is_valid = bcrypt.checkpw(normalized_answer.encode('utf-8'), stored_hash)
-
-        if not is_valid:
-            raise HTTPException(status_code=401, detail="Incorrect security answer")
-
-        # Hash new PIN
-        new_pin_hash = bcrypt.hashpw(reset_data.new_pin.encode('utf-8'), bcrypt.gensalt())
-
-        # Update PIN
-        await db_service.update_user_pin(
-            user_doc["id"],
-            new_pin_hash.decode('utf-8')
-        )
-
-        return {
-            "message": "PIN reset successful"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error resetting PIN: {str(e)}")
+        logger.error(f"Error fetching user: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")

@@ -1,30 +1,24 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 from datetime import datetime
 import uuid
 
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    pin_hash: str
-    security_question: Optional[str] = None
-    security_answer_hash: Optional[str] = None
+    email: str
+    password_hash: str
+    name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     preferences: dict = Field(default_factory=dict)
 
-class UserCreate(BaseModel):
-    pin: str
-    security_question: Optional[str] = None
-    security_answer: Optional[str] = None
+class UserSignup(BaseModel):
+    email: EmailStr
+    password: str
+    name: Optional[str] = None
 
-class UserVerify(BaseModel):
-    pin: str
-
-class SecurityAnswerVerify(BaseModel):
-    answer: str
-
-class PINReset(BaseModel):
-    new_pin: str
-    security_answer: str
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 
 class Category(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

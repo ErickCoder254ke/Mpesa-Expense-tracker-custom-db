@@ -30,7 +30,18 @@ class PesaDBService:
         """Get total number of users"""
         try:
             result = await query_db("SELECT COUNT(*) as count FROM users")
-            return result[0]['count'] if result else 0
+            if result and len(result) > 0:
+                # Try different possible key names
+                row = result[0]
+                if 'count' in row:
+                    return int(row['count'])
+                elif 'COUNT(*)' in row:
+                    return int(row['COUNT(*)'])
+                # Fallback: get first numeric value
+                for val in row.values():
+                    if isinstance(val, (int, float)):
+                        return int(val)
+            return 0
         except Exception as e:
             if is_table_not_found_error(e):
                 # Table doesn't exist yet - return 0
@@ -46,6 +57,28 @@ class PesaDBService:
         except Exception as e:
             if is_table_not_found_error(e):
                 # Table doesn't exist yet - return None
+                return None
+            raise
+
+    @staticmethod
+    async def get_all_users() -> List[Dict[str, Any]]:
+        """Get all users"""
+        try:
+            result = await query_db("SELECT * FROM users")
+            return result if result else []
+        except Exception as e:
+            if is_table_not_found_error(e):
+                return []
+            raise
+
+    @staticmethod
+    async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+        """Get user by ID"""
+        try:
+            result = await query_db(f"SELECT * FROM users WHERE id = '{user_id}' LIMIT 1")
+            return result[0] if result else None
+        except Exception as e:
+            if is_table_not_found_error(e):
                 return None
             raise
     
@@ -109,7 +142,16 @@ class PesaDBService:
         """Count total categories"""
         try:
             result = await query_db("SELECT COUNT(*) as count FROM categories")
-            return result[0]['count'] if result else 0
+            if result and len(result) > 0:
+                row = result[0]
+                if 'count' in row:
+                    return int(row['count'])
+                elif 'COUNT(*)' in row:
+                    return int(row['COUNT(*)'])
+                for val in row.values():
+                    if isinstance(val, (int, float)):
+                        return int(val)
+            return 0
         except Exception as e:
             if is_table_not_found_error(e):
                 return 0
@@ -232,9 +274,18 @@ class PesaDBService:
         where_clause = f"user_id = '{user_id}'"
         if category_id:
             where_clause += f" AND category_id = '{category_id}'"
-        
+
         result = await query_db(f"SELECT COUNT(*) as count FROM transactions WHERE {where_clause}")
-        return result[0]['count'] if result else 0
+        if result and len(result) > 0:
+            row = result[0]
+            if 'count' in row:
+                return int(row['count'])
+            elif 'COUNT(*)' in row:
+                return int(row['COUNT(*)'])
+            for val in row.values():
+                if isinstance(val, (int, float)):
+                    return int(val)
+        return 0
     
     @staticmethod
     async def get_transaction_by_message_hash(message_hash: str) -> Optional[Dict[str, Any]]:
@@ -451,7 +502,16 @@ class PesaDBService:
         SELECT COUNT(*) as count FROM duplicate_logs
         WHERE user_id = '{user_id}'
         """)
-        return result[0]['count'] if result else 0
+        if result and len(result) > 0:
+            row = result[0]
+            if 'count' in row:
+                return int(row['count'])
+            elif 'COUNT(*)' in row:
+                return int(row['COUNT(*)'])
+            for val in row.values():
+                if isinstance(val, (int, float)):
+                    return int(val)
+        return 0
     
     # ==================== STATUS CHECK OPERATIONS ====================
     

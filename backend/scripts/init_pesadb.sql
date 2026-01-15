@@ -18,12 +18,12 @@
 -- ============================================================================
 -- USERS TABLE
 -- ============================================================================
--- Stores user accounts with PIN-based authentication
+-- Stores user accounts with email/password authentication
 CREATE TABLE users (
     id STRING PRIMARY KEY,
-    pin_hash STRING,
-    security_question STRING,
-    security_answer_hash STRING,
+    email STRING,
+    password_hash STRING,
+    name STRING,
     created_at STRING,
     preferences STRING
 );
