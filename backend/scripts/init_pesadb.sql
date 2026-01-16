@@ -41,7 +41,8 @@ CREATE TABLE categories (
 -- ========================================
 -- Table 3: Transactions
 -- ========================================
--- References: users, categories, transactions (self-referential)
+-- References: users, categories
+-- Note: parent_transaction_id does NOT have FK constraint (PesaDB limitation with self-referential FKs)
 CREATE TABLE transactions (
     id STRING PRIMARY KEY,
     user_id STRING REFERENCES users(id),
@@ -56,7 +57,7 @@ CREATE TABLE transactions (
     created_at STRING,
     transaction_group_id STRING,
     transaction_role STRING,
-    parent_transaction_id STRING REFERENCES transactions(id)
+    parent_transaction_id STRING
 );
 
 -- ========================================
@@ -191,9 +192,13 @@ VALUES ('cat-other', 'system', 'Other', '📌', '#D4A5A5', '[]', TRUE);
 --
 -- TRANSACTIONS
 --   ↑
---   ├── TRANSACTIONS.parent_transaction_id (self-referential for fees)
+--   ├── TRANSACTIONS.parent_transaction_id (NO FK CONSTRAINT - app-level integrity)
 --   ├── DUPLICATE_LOGS.original_transaction_id
 --   └── DUPLICATE_LOGS.duplicate_transaction_id
+--
+-- Note: PesaDB does not support self-referential foreign keys, so
+-- parent_transaction_id is a plain STRING field. The application
+-- maintains referential integrity at the code level.
 --
 -- Referential Integrity Notes:
 -- 1. Deleting a user should cascade delete their transactions, budgets, logs

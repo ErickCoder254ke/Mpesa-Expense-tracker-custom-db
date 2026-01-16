@@ -490,7 +490,8 @@ class DatabaseInitializer:
     is_default BOOL
 )"""
             ),
-            # Transactions table (references users, categories, and self)
+            # Transactions table (references users, categories)
+            # Note: parent_transaction_id has no FK constraint (PesaDB limitation)
             (
                 "transactions",
                 """CREATE TABLE transactions (
@@ -507,7 +508,7 @@ class DatabaseInitializer:
     created_at STRING,
     transaction_group_id STRING,
     transaction_role STRING,
-    parent_transaction_id STRING REFERENCES transactions(id)
+    parent_transaction_id STRING
 )"""
             ),
             # Budgets table (references users and categories)
