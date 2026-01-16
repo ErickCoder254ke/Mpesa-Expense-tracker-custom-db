@@ -1,0 +1,26 @@
+# Railway.toml - Frontend Configuration
+# This file configures the frontend deployment for Railway
+# Place this in the frontend/ directory
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npm run build:web"
+
+[deploy]
+startCommand = "npm run serve:web"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[[deploy.environmentVariables]]
+name = "NODE_VERSION"
+value = "18.17.0"
+
+[[deploy.environmentVariables]]
+name = "EXPO_PUBLIC_BACKEND_URL"
+# Set this in Railway dashboard to your backend URL
+# Example: https://your-backend.up.railway.app
+
+# Note: For sensitive environment variables, set them in Railway dashboard
+# rather than in this file

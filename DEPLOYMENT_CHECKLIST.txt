@@ -1,0 +1,218 @@
+================================================================================
+          M-PESA EXPENSE TRACKER - RAILWAY DEPLOYMENT CHECKLIST
+================================================================================
+
+Date: _____________    Deployment by: _____________________
+
+================================================================================
+                              PREPARATION PHASE
+================================================================================
+
+[ ] Railway account created (railway.app)
+[ ] GitHub repository connected to Railway
+[ ] PesaDB API key obtained: ____________________________
+[ ] JWT secret generated (64 chars): _____________________
+[ ] All code committed and pushed to GitHub
+[ ] Read RAILWAY_QUICK_START.md
+
+================================================================================
+                          BACKEND DEPLOYMENT (10 MIN)
+================================================================================
+
+[ ] Created new Railway project
+[ ] Selected GitHub repository
+[ ] Dockerfile detected by Railway
+[ ] Added environment variables:
+    [ ] PESADB_API_KEY
+    [ ] JWT_SECRET_KEY
+    [ ] PESADB_API_URL (optional, has default)
+    [ ] PESADB_DATABASE (optional, has default)
+[ ] Generated public domain
+[ ] Backend URL: ___________________________________________
+[ ] Health check passed: curl [URL]/api/health
+[ ] Health check returns: {"status":"healthy",...}
+
+================================================================================
+                         FRONTEND DEPLOYMENT (5 MIN)
+                              (OPTIONAL)
+================================================================================
+
+[ ] Created frontend service in Railway
+[ ] Set root directory: frontend
+[ ] Set build command: npm install && npm run build:web
+[ ] Set start command: npm run serve:web
+[ ] Added environment variable:
+    [ ] EXPO_PUBLIC_BACKEND_URL (backend Railway URL)
+[ ] Generated public domain
+[ ] Frontend URL: __________________________________________
+[ ] Frontend loads without errors
+[ ] Browser console shows no errors
+
+================================================================================
+                          VERIFICATION TESTS
+================================================================================
+
+BACKEND TESTS:
+[ ] GET /api/health returns 200 OK
+[ ] GET /api/ returns API info
+[ ] POST /api/initialize-database succeeds
+[ ] Railway logs show no errors
+[ ] Database status: "connected"
+[ ] Database initialized: true
+
+FRONTEND TESTS (if deployed):
+[ ] Page loads successfully
+[ ] No console errors (F12)
+[ ] Backend URL configured correctly
+[ ] Can see login/signup forms
+
+END-TO-END TESTS:
+[ ] Can sign up new user
+[ ] Can login with email/password
+[ ] Can create a transaction
+[ ] Can view transaction list
+[ ] Categories load correctly
+[ ] Budget features work
+[ ] SMS import works (if applicable)
+
+================================================================================
+                          SECURITY CHECKLIST
+================================================================================
+
+[ ] JWT_SECRET_KEY is strong (64+ characters)
+[ ] PESADB_API_KEY is secure
+[ ] No secrets in Git history
+[ ] .env file not committed
+[ ] CORS properly configured
+[ ] Railway 2FA enabled
+[ ] Credentials saved in password manager
+[ ] Scheduled key rotation (90 days)
+
+================================================================================
+                          POST-DEPLOYMENT
+================================================================================
+
+[ ] Documented backend URL in project README
+[ ] Documented frontend URL in project README
+[ ] Set up Railway monitoring alerts
+[ ] Tested all major features
+[ ] Created backup of environment variables
+[ ] Notified team/users of deployment
+[ ] Scheduled first maintenance check (1 week)
+
+================================================================================
+                          MONITORING SETUP
+================================================================================
+
+[ ] Railway dashboard bookmarked
+[ ] Alerts configured for:
+    [ ] Health check failures
+    [ ] High CPU usage
+    [ ] High memory usage
+    [ ] Deployment failures
+[ ] Monitoring schedule created:
+    [ ] Daily: Check logs for errors
+    [ ] Weekly: Review metrics
+    [ ] Monthly: Security audit
+    [ ] Quarterly: Rotate secrets
+
+================================================================================
+                          TROUBLESHOOTING LOG
+================================================================================
+
+Issue #1:
+Description: ________________________________________________________
+Solution: ___________________________________________________________
+Time spent: _________________________________________________________
+
+Issue #2:
+Description: ________________________________________________________
+Solution: ___________________________________________________________
+Time spent: _________________________________________________________
+
+Issue #3:
+Description: ________________________________________________________
+Solution: ___________________________________________________________
+Time spent: _________________________________________________________
+
+================================================================================
+                          DEPLOYMENT SUMMARY
+================================================================================
+
+Total time spent: _______________
+Backend URL: _______________________________________________________
+Frontend URL: ______________________________________________________
+Database: PesaDB (external API)
+Health check: /api/health
+API documentation: /docs
+
+Deployment status: [ ] SUCCESS  [ ] FAILED  [ ] PARTIAL
+
+Notes:
+_______________________________________________________________________
+_______________________________________________________________________
+_______________________________________________________________________
+_______________________________________________________________________
+
+================================================================================
+                          IMPORTANT URLS
+================================================================================
+
+Railway Dashboard: https://railway.app/dashboard
+Backend API: _______________________________________________________
+Backend Docs: ______________________________________________/docs
+Backend Health: ____________________________________________/api/health
+Frontend App: ______________________________________________________
+GitHub Repo: _______________________________________________________
+PesaDB Dashboard: __________________________________________________
+
+================================================================================
+                          EMERGENCY CONTACTS
+================================================================================
+
+Railway Support: https://discord.gg/railway
+PesaDB Support: ____________________________________________________
+Team Lead: _________________________________________________________
+DevOps Contact: ____________________________________________________
+
+================================================================================
+                          ROLLBACK PROCEDURE
+================================================================================
+
+If deployment fails:
+1. [ ] Go to Railway Dashboard → Deployments
+2. [ ] Find last working deployment
+3. [ ] Click "..." → "Redeploy"
+4. [ ] Verify health check passes
+5. [ ] Document issue in troubleshooting log
+
+================================================================================
+                          SIGNATURE
+================================================================================
+
+Deployment completed by: _______________________________
+
+Date: __________  Time: __________  Timezone: __________
+
+Verified by: ___________________________________________
+
+Date: __________  Time: __________
+
+================================================================================
+                    DEPLOYMENT COMPLETE! 🎉
+================================================================================
+
+Next review scheduled: __________________________________________
+
+Maintenance schedule:
+- Daily: Check logs
+- Weekly: Review metrics  
+- Monthly: Security audit
+- Quarterly: Rotate secrets
+
+================================================================================
+              For detailed guides, see:
+              - RAILWAY_QUICK_START.md
+              - RAILWAY_DEPLOYMENT_GUIDE.md
+              - DEPLOYMENT_READY.md
+================================================================================
