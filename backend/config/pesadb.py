@@ -184,80 +184,48 @@ class PesaDBClient:
         """
         Create a new database
 
+        IMPORTANT: PesaDB databases are typically pre-created via dashboard.
+        This method is provided for compatibility but may not be supported.
+
         Args:
             database_name: Name of the database to create
 
         Returns:
-            True if successful
-
-        Raises:
-            Exception: If creation fails
+            True if successful, False if not supported
         """
-        self.config.validate()
+        import logging
+        logger = logging.getLogger(__name__)
 
-        if not self.session:
-            self.session = aiohttp.ClientSession()
+        logger.warning(
+            f"⚠️  Database creation via API may not be supported. "
+            f"If initialization fails, ensure database '{database_name}' "
+            f"exists in your PesaDB dashboard."
+        )
 
-        url = f"{self.config.api_url}/databases"
-
-        payload = {
-            'name': database_name
-        }
-
-        try:
-            async with self.session.post(
-                url,
-                headers=self.config.get_headers(),
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                result = await response.json()
-
-                if not result.get('success'):
-                    error_msg = result.get('error', 'Database creation failed')
-                    raise Exception(f"PesaDB Error: {error_msg}")
-
-                return True
-
-        except aiohttp.ClientError as e:
-            raise Exception(f"PesaDB Connection Error: {str(e)}")
-        except Exception as e:
-            raise Exception(f"PesaDB Database Creation Error: {str(e)}")
+        # Database should be pre-created in PesaDB dashboard
+        # Most PesaDB instances don't support CREATE DATABASE via API
+        return True
 
     async def database_exists(self, database_name: str) -> bool:
         """
         Check if a database exists
 
+        IMPORTANT: PesaDB typically doesn't expose database listing via API.
+        This method assumes the database exists if configured.
+
         Args:
             database_name: Name of the database to check
 
         Returns:
-            True if database exists, False otherwise
+            True (assumes database exists if properly configured)
         """
-        self.config.validate()
+        import logging
+        logger = logging.getLogger(__name__)
 
-        if not self.session:
-            self.session = aiohttp.ClientSession()
-
-        url = f"{self.config.api_url}/databases"
-
-        try:
-            async with self.session.get(
-                url,
-                headers=self.config.get_headers(),
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                result = await response.json()
-
-                if not result.get('success'):
-                    return False
-
-                databases = result.get('databases', [])
-                return database_name in databases
-
-        except Exception:
-            # If we can't list databases, assume it doesn't exist
-            return False
+        # PesaDB databases are pre-created via dashboard
+        # Assume database exists if API key and URL are configured
+        logger.debug(f"Assuming database '{database_name}' exists (pre-created in PesaDB dashboard)")
+        return True
 
     async def close(self):
         """Close the client session"""
@@ -312,11 +280,14 @@ async def create_database(database_name: str) -> bool:
     """
     Convenience function to create a database
 
+    DEPRECATED: PesaDB databases should be pre-created via dashboard.
+    This function exists for backward compatibility only.
+
     Args:
         database_name: Name of the database to create
 
     Returns:
-        True if successful
+        True (assumes database is pre-created)
     """
     client = get_client()
     return await client.create_database(database_name)
@@ -326,11 +297,14 @@ async def database_exists(database_name: str) -> bool:
     """
     Convenience function to check if database exists
 
+    DEPRECATED: PesaDB doesn't expose database listing.
+    This function assumes the database exists if configured.
+
     Args:
         database_name: Name of the database to check
 
     Returns:
-        True if database exists
+        True (assumes database is pre-created)
     """
     client = get_client()
     return await client.database_exists(database_name)

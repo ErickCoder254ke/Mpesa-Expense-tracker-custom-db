@@ -62,50 +62,78 @@ async def root():
 
 @api_router.get("/health")
 async def health_check():
-    """Health check endpoint to verify backend connectivity"""
-    try:
-        # Test database connectivity with PesaDB
-        pesadb_api_url = os.environ.get('PESADB_API_URL', 'NOT_SET')
-        pesadb_database = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
-
-        # Try a simple query to test connection and verify tables exist
-        user_count = await db_service.get_user_count()
-        category_count = await db_service.count_categories()
-
-        # Only count transactions if user exists
-        if user_count > 0:
-            user_doc = await db_service.get_user()
-            transaction_count = await db_service.count_transactions(user_doc["id"]) if user_doc else 0
-        else:
-            transaction_count = 0
-
-        db_status = "connected"
-        db_initialized = user_count > 0 and category_count > 0
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-        db_initialized = False
-        transaction_count = 0
-        user_count = 0
-        category_count = 0
-
-    return {
+    """Health check endpoint to verify backend connectivity and database status"""
+    health_data = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0",
         "database": {
-            "status": db_status,
-            "initialized": db_initialized,
+            "status": "unknown",
+            "initialized": False,
             "type": "PesaDB",
-            "api_url": pesadb_api_url,
-            "database_name": pesadb_database,
-            "api_key_configured": os.environ.get('PESADB_API_KEY') is not None,
-            "stats": {
-                "users": user_count,
-                "categories": category_count,
-                "transactions": transaction_count
+            "tables": {},
+            "config": {
+                "api_url": os.environ.get('PESADB_API_URL', 'NOT_SET'),
+                "database_name": os.environ.get('PESADB_DATABASE', 'mpesa_tracker'),
+                "api_key_configured": os.environ.get('PESADB_API_KEY') is not None
             }
         },
-        "message": "M-Pesa Expense Tracker Backend is running (PesaDB)"
+        "message": "M-Pesa Expense Tracker Backend (PesaDB)"
     }
+
+    # Check database connectivity and tables
+    try:
+        # Test basic connectivity by checking each required table
+        required_tables = ['users', 'categories', 'transactions', 'budgets']
+        table_status = {}
+
+        for table in required_tables:
+            try:
+                # Attempt to query each table
+                if table == 'users':
+                    count = await db_service.get_user_count()
+                elif table == 'categories':
+                    count = await db_service.count_categories()
+                elif table == 'transactions':
+                    # Can't count without user_id, so just check if table exists
+                    await query_db(f"SELECT * FROM {table} LIMIT 1")
+                    count = "exists"
+                elif table == 'budgets':
+                    await query_db(f"SELECT * FROM {table} LIMIT 1")
+                    count = "exists"
+
+                table_status[table] = {"exists": True, "count": count}
+            except Exception as table_error:
+                error_msg = str(table_error).lower()
+                if 'not found' in error_msg or 'does not exist' in error_msg:
+                    table_status[table] = {"exists": False, "error": "table not found"}
+                else:
+                    table_status[table] = {"exists": False, "error": str(table_error)[:100]}
+
+        health_data["database"]["tables"] = table_status
+
+        # Consider database initialized if all required tables exist
+        all_tables_exist = all(table_status[t].get("exists", False) for t in required_tables)
+        health_data["database"]["initialized"] = all_tables_exist
+
+        # Get counts for display
+        if all_tables_exist:
+            health_data["database"]["status"] = "connected"
+            health_data["database"]["stats"] = {
+                "users": table_status["users"].get("count", 0),
+                "categories": table_status["categories"].get("count", 0)
+            }
+        else:
+            health_data["database"]["status"] = "tables_missing"
+            health_data["message"] = "Backend running but database not initialized"
+            health_data["action_required"] = "Run POST /api/initialize-database to create tables"
+
+    except Exception as e:
+        health_data["database"]["status"] = f"error: {str(e)[:100]}"
+        health_data["database"]["error_detail"] = str(e)
+        health_data["message"] = "Backend running but database connection failed"
+
+    return health_data
 
 @api_router.post("/initialize-database")
 async def manual_database_initialization():

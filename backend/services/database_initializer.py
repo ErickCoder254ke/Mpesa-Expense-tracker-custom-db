@@ -25,33 +25,23 @@ class DatabaseInitializer:
     @staticmethod
     async def ensure_database_exists() -> bool:
         """
-        Ensure the target database exists, create it if it doesn't
+        Ensure the target database exists
+
+        IMPORTANT: PesaDB databases must be pre-created via dashboard.
+        This method validates configuration but doesn't create databases.
 
         Returns:
-            True if database exists or was created successfully
+            True (assumes database is pre-created in PesaDB dashboard)
         """
         database_name = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
 
-        try:
-            logger.info(f"🔍 Checking if database '{database_name}' exists...")
-            exists = await database_exists(database_name)
+        logger.info(f"📝 Using PesaDB database: '{database_name}'")
+        logger.info(f"   ℹ️  Ensure this database exists in your PesaDB dashboard")
+        logger.info(f"   ℹ️  PesaDB databases cannot be created via API")
 
-            if exists:
-                logger.info(f"✅ Database '{database_name}' already exists")
-                return True
-
-            logger.info(f"📝 Database '{database_name}' does not exist, creating it...")
-            await create_database(database_name)
-            logger.info(f"✅ Database '{database_name}' created successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Error ensuring database exists: {str(e)}", exc_info=True)
-            # Don't fail completely - maybe the API doesn't support listing/creating databases
-            # and the database already exists - but log the full details
-            logger.warning(f"⚠️  Continuing anyway - database might already exist or API has limited permissions")
-            logger.debug(f"Database check exception details: {type(e).__name__}: {str(e)}")
-            return True
+        # Database should already exist in PesaDB dashboard
+        # We'll verify connectivity by attempting a simple query later
+        return True
 
     @staticmethod
     async def table_exists(table_name: str) -> bool:
@@ -214,33 +204,33 @@ class DatabaseInitializer:
     def parse_sql_statements(sql_content: str) -> List[str]:
         """
         Parse SQL content into individual statements
-        
+
         Args:
             sql_content: Raw SQL content
-            
+
         Returns:
             List of SQL statements
         """
         # Split by semicolon and filter out comments and empty lines
         statements = []
         for stmt in sql_content.split(';'):
-            stmt = stmt.strip()
-            # Skip empty statements and comment-only lines
-            if not stmt or stmt.startswith('--'):
-                continue
-            # Remove inline comments
+            # Remove inline comments first
             lines = []
             for line in stmt.split('\n'):
-                # Remove comment part but keep the SQL
+                # Remove comment part (everything after --)
                 if '--' in line:
                     line = line[:line.index('--')]
                 line = line.strip()
-                if line:
+                if line:  # Only add non-empty lines
                     lines.append(line)
-            
+
+            # Join lines and check if we have a real statement
             if lines:
-                statements.append('\n'.join(lines))
-        
+                full_statement = ' '.join(lines)
+                # Only include statements that have SQL keywords
+                if any(keyword in full_statement.upper() for keyword in ['CREATE', 'INSERT', 'UPDATE', 'DELETE', 'SELECT', 'DROP', 'ALTER']):
+                    statements.append(full_statement)
+
         return statements
     
     @staticmethod
@@ -290,10 +280,14 @@ class DatabaseInitializer:
             # Load SQL from file
             logger.info("📖 Loading SQL schema from init_pesadb.sql...")
             sql_content = await DatabaseInitializer.load_sql_from_file()
+            logger.info(f"   ✅ SQL file loaded successfully ({len(sql_content)} characters)")
 
             # Parse statements
             statements = DatabaseInitializer.parse_sql_statements(sql_content)
-            logger.info(f"📝 Found {len(statements)} SQL statements to execute")
+            logger.info(f"📝 Parsed {len(statements)} executable SQL statements")
+
+            if len(statements) == 0:
+                raise ValueError("SQL file contains no executable statements")
 
             # Execute each statement
             for i, statement in enumerate(statements, 1):
@@ -359,8 +353,16 @@ class DatabaseInitializer:
         except FileNotFoundError as e:
             error_msg = f"SQL file not found: {str(e)}"
             logger.error(f"❌ {error_msg}")
+            logger.error(f"   Expected location: backend/scripts/init_pesadb.sql")
             errors.append(error_msg)
             # Fall back to inline schema if file not found
+            logger.warning("⚠️  Falling back to inline schema definitions...")
+            return await DatabaseInitializer.create_tables_inline()
+
+        except ValueError as e:
+            error_msg = f"SQL parsing error: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            errors.append(error_msg)
             logger.warning("⚠️  Falling back to inline schema definitions...")
             return await DatabaseInitializer.create_tables_inline()
 
@@ -368,6 +370,8 @@ class DatabaseInitializer:
             error_msg = f"Error loading SQL schema: {str(e)}"
             logger.error(f"❌ {error_msg}")
             errors.append(error_msg)
+            logger.warning("⚠️  Falling back to inline schema definitions...")
+            return await DatabaseInitializer.create_tables_inline()
 
         # After tables are created, execute INSERT statements
         logger.info("📦 Now executing INSERT statements for seed data...")
