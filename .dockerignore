@@ -1,0 +1,89 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+MD files/
+docs/
+
+# Frontend files (not needed for backend Docker build)
+frontend/node_modules
+frontend/dist
+frontend/build
+frontend/web-build
+frontend/.expo
+frontend/.expo-shared
+frontend-package-template.json
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.eggs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov/
+.tox/
+tests/
+
+# Environment files (these should be set via platform env vars)
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+*.patch
+model.patch
+package-lock.json
+railway.json
+render.yaml
+eas.json
+
+# Scripts not needed in production
+backend/scripts/
+fix-gitignore.sh
+gitignore.txt
+env.txt
+
+# Test files
+backend_test.py
+test-*.py
+*_test.py
