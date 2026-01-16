@@ -486,6 +486,14 @@ class SMSParserService {
       await AsyncStorage.setItem('sms_preferences', JSON.stringify(preferences));
     } catch (error) {
       console.error('Error saving SMS preferences:', error);
+      // Fallback: store in memory for web platforms if AsyncStorage fails
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('sms_preferences', JSON.stringify(preferences));
+        } catch (localStorageError) {
+          console.error('LocalStorage fallback failed:', localStorageError);
+        }
+      }
     }
   }
 
@@ -504,6 +512,17 @@ class SMSParserService {
       }
     } catch (error) {
       console.error('Error getting SMS preferences:', error);
+      // Fallback: try localStorage for web platforms
+      if (typeof window !== 'undefined') {
+        try {
+          const localPrefs = localStorage.getItem('sms_preferences');
+          if (localPrefs) {
+            return JSON.parse(localPrefs);
+          }
+        } catch (localStorageError) {
+          console.error('LocalStorage fallback failed:', localStorageError);
+        }
+      }
     }
 
     // Default preferences

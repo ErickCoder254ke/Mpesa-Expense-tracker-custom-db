@@ -81,12 +81,21 @@ export default function Settings() {
     }
   };
 
-  const loadSMSPreferences = () => {
-    const prefs = smsParserService.getSMSPreferences();
-    setSmsPreferences({
-      autoCategorize: prefs.auto_categorize ?? true,
-      requireReview: prefs.require_review ?? false,
-    });
+  const loadSMSPreferences = async () => {
+    try {
+      const prefs = await smsParserService.getSMSPreferences();
+      setSmsPreferences({
+        autoCategorize: prefs.auto_categorize ?? true,
+        requireReview: prefs.require_review ?? false,
+      });
+    } catch (error) {
+      console.error('Error loading SMS preferences:', error);
+      // Set default preferences on error
+      setSmsPreferences({
+        autoCategorize: true,
+        requireReview: false,
+      });
+    }
   };
 
   const handleLogout = () => {
@@ -117,12 +126,18 @@ export default function Settings() {
     );
   };
 
-  const saveSMSPreferences = (prefs: typeof smsPreferences) => {
-    smsParserService.saveSMSPreferences({
-      auto_categorize: prefs.autoCategorize,
-      require_review: prefs.requireReview,
-    });
-    setSmsPreferences(prefs);
+  const saveSMSPreferences = async (prefs: typeof smsPreferences) => {
+    try {
+      await smsParserService.saveSMSPreferences({
+        auto_categorize: prefs.autoCategorize,
+        require_review: prefs.requireReview,
+        enabled: true, // Add enabled flag
+      });
+      setSmsPreferences(prefs);
+    } catch (error) {
+      console.error('Error saving SMS preferences:', error);
+      Alert.alert('Error', 'Failed to save preferences');
+    }
   };
 
   const openCreateModal = () => {
