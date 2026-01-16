@@ -1,12 +1,18 @@
--- M-Pesa Expense Tracker Database Schema
--- Schema Version: 2.0.0 (Email/Password Authentication)
--- Compatible with PesaDB SQL Database
--- Generated: 2025-01-16
+-- M-Pesa Expense Tracker - Database Initialization Script
+-- PesaDB SQL Schema (v2.0.0)
+-- Last Updated: 2026-01-16
+--
+-- IMPORTANT: PesaDB Constraints
+-- - No IF NOT EXISTS support
+-- - No DEFAULT keyword
+-- - No NOT NULL keyword
+-- - Use BOOL instead of BOOLEAN
+-- - Use STRING instead of VARCHAR/TEXT
+-- - Use FLOAT instead of DECIMAL
 
--- =============================================================================
--- TABLE: users
--- Description: User accounts with email/password authentication
--- =============================================================================
+-- ========================================
+-- Table 1: Users
+-- ========================================
 CREATE TABLE users (
     id STRING PRIMARY KEY,
     email STRING,
@@ -16,10 +22,9 @@ CREATE TABLE users (
     preferences STRING
 );
 
--- =============================================================================
--- TABLE: categories
--- Description: Expense/income categories with smart categorization support
--- =============================================================================
+-- ========================================
+-- Table 2: Categories
+-- ========================================
 CREATE TABLE categories (
     id STRING PRIMARY KEY,
     user_id STRING,
@@ -30,10 +35,9 @@ CREATE TABLE categories (
     is_default BOOL
 );
 
--- =============================================================================
--- TABLE: transactions
--- Description: Financial transactions from M-Pesa SMS or manual entry
--- =============================================================================
+-- ========================================
+-- Table 3: Transactions
+-- ========================================
 CREATE TABLE transactions (
     id STRING PRIMARY KEY,
     user_id STRING,
@@ -51,10 +55,9 @@ CREATE TABLE transactions (
     parent_transaction_id STRING
 );
 
--- =============================================================================
--- TABLE: budgets
--- Description: Monthly budget limits per category
--- =============================================================================
+-- ========================================
+-- Table 4: Budgets
+-- ========================================
 CREATE TABLE budgets (
     id STRING PRIMARY KEY,
     user_id STRING,
@@ -66,10 +69,9 @@ CREATE TABLE budgets (
     created_at STRING
 );
 
--- =============================================================================
--- TABLE: sms_import_logs
--- Description: Logs for SMS import sessions (tracking and debugging)
--- =============================================================================
+-- ========================================
+-- Table 5: SMS Import Logs
+-- ========================================
 CREATE TABLE sms_import_logs (
     id STRING PRIMARY KEY,
     user_id STRING,
@@ -83,10 +85,9 @@ CREATE TABLE sms_import_logs (
     created_at STRING
 );
 
--- =============================================================================
--- TABLE: duplicate_logs
--- Description: Duplicate transaction detection logs
--- =============================================================================
+-- ========================================
+-- Table 6: Duplicate Logs
+-- ========================================
 CREATE TABLE duplicate_logs (
     id STRING PRIMARY KEY,
     user_id STRING,
@@ -102,10 +103,9 @@ CREATE TABLE duplicate_logs (
     action_taken STRING
 );
 
--- =============================================================================
--- TABLE: status_checks
--- Description: System health check logs
--- =============================================================================
+-- ========================================
+-- Table 7: Status Checks
+-- ========================================
 CREATE TABLE status_checks (
     id STRING PRIMARY KEY,
     status STRING,
@@ -113,12 +113,11 @@ CREATE TABLE status_checks (
     details STRING
 );
 
--- =============================================================================
--- SEED DATA: Default Categories
--- Description: Pre-configured categories for M-Pesa expense tracking
--- =============================================================================
+-- ========================================
+-- Seed Data: Default Categories
+-- ========================================
 
-INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default) 
+INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
 VALUES ('cat-food', 'system', 'Food & Dining', '🍔', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "nyama", "choma"]', TRUE);
 
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
@@ -154,6 +153,6 @@ VALUES ('cat-income', 'system', 'Income', '💵', '#90EE90', '["salary", "income
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
 VALUES ('cat-other', 'system', 'Other', '📌', '#D4A5A5', '[]', TRUE);
 
--- =============================================================================
--- END OF SCHEMA
--- =============================================================================
+-- ========================================
+-- End of Initialization Script
+-- ========================================
