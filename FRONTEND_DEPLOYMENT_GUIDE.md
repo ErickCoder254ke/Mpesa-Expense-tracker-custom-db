@@ -78,9 +78,9 @@ The build process consists of:
    - Installs all packages from `frontend/package.json`
    - Includes Expo, React Native Web, and Metro bundler
 
-2. **Build Web Bundle** (`npm run build:web`)
-   - Runs `expo export:web`
-   - Compiles React Native components to web-compatible code
+2. **Build Web Bundle** (`npm run build`)
+   - Runs `expo export --platform web`
+   - Compiles React Native components to web-compatible code using Metro bundler
    - Outputs static files to `dist/` directory
    - Includes HTML, CSS, and JavaScript bundles
 
@@ -127,6 +127,8 @@ The build process consists of:
    - Contains default backend URL in `extra` section
    - Used as fallback if environment variable not set
    - Currently set to: `https://mpesa-expense-tracker-custom-db.onrender.com`
+   - Configured to use Metro bundler (`"web": { "bundler": "metro" }`)
+   - Metro is the modern Expo bundler (replaces older Webpack bundler)
 
 ## API Configuration
 
@@ -165,7 +167,12 @@ To point to a different backend:
 - **Solution**: Check that `rootDir: frontend` is set in render.yaml
 - **Reason**: Ensures npm runs in the frontend directory with correct package.json
 
-**Problem**: expo export:web fails
+**Problem**: Error "expo export:web can only be used with Webpack"
+- **Solution**: Use `expo export --platform web` instead
+- **Solution**: Verify `app.json` has `"web": { "bundler": "metro" }`
+- **Reason**: The command `expo export:web` only works with Webpack bundler, not Metro
+
+**Problem**: expo export fails
 - **Solution**: Check Node version (should be 18.x)
 - **Solution**: Verify all dependencies in package.json are available
 - **Reason**: Expo requires specific Node versions and dependencies
@@ -243,7 +250,7 @@ npm install
 npm start
 
 # Build web bundle
-npm run build:web
+npm run build
 
 # Serve production build locally
 npm run serve:web
@@ -253,7 +260,7 @@ npm run serve:web
 
 ```bash
 cd frontend
-npm run build:web
+npm run build
 npm run serve:web
 # Open http://localhost:3000
 ```
