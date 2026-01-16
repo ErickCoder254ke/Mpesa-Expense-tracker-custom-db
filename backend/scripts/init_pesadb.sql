@@ -122,10 +122,19 @@ CREATE TABLE status_checks (
 );
 
 -- ========================================
+-- Seed Data: System User
+-- ========================================
+-- Create a 'system' user for default categories
+-- This user is required for foreign key constraints on system categories
+
+INSERT INTO users (id, email, password_hash, name, created_at, preferences)
+VALUES ('system', 'system@internal', 'SYSTEM_ACCOUNT_NO_LOGIN', 'System Account', '2026-01-16T00:00:00Z', '{"is_system": true}');
+
+-- ========================================
 -- Seed Data: Default Categories
 -- ========================================
 -- System categories with user_id = 'system'
--- These should be inserted AFTER the users table exists
+-- These should be inserted AFTER the system user exists
 
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
 VALUES ('cat-food', 'system', 'Food & Dining', '🍔', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "nyama", "choma"]', TRUE);

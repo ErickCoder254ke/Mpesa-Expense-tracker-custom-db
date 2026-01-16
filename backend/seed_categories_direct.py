@@ -22,9 +22,25 @@ logger = logging.getLogger(__name__)
 
 async def seed_categories_direct():
     """Seed categories directly without checking if they exist first"""
-    
+
     logger.info("🌱 Starting direct category seeding...")
-    
+
+    # First, ensure system user exists (required for foreign key constraint)
+    logger.info("📝 Ensuring system user exists...")
+    try:
+        system_user_sql = """INSERT INTO users (id, email, password_hash, name, created_at, preferences)
+VALUES ('system', 'system@internal', 'SYSTEM_ACCOUNT_NO_LOGIN', 'System Account', '2026-01-16T00:00:00Z', '{"is_system": true}')"""
+        await execute_db(system_user_sql)
+        logger.info("✅ System user created")
+    except Exception as e:
+        error_str = str(e).lower()
+        if any(word in error_str for word in ['duplicate', 'exists', 'unique', 'constraint']):
+            logger.info("✅ System user already exists")
+        else:
+            logger.error(f"❌ Error creating system user: {e}")
+            logger.error("   Cannot seed categories without system user!")
+            return False
+
     categories = [
         {
             'sql': """INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)

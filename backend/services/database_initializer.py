@@ -391,19 +391,29 @@ class DatabaseInitializer:
                         logger.debug(f"📝 Inserting seed data into '{table_name}'...")
                         await execute_db(statement)
                         insert_count += 1
+                        logger.debug(f"✅ Seed data inserted into '{table_name}'")
                     except Exception as e:
-                        # Check if error is due to duplicate entry
+                        # Check if error is due to duplicate entry or foreign key
                         error_str = str(e).lower()
                         if any(phrase in error_str for phrase in [
                             'duplicate',
                             'already exists',
-                            'unique',
-                            'constraint'
+                            'unique'
                         ]):
-                            logger.debug(f"⏭️  Seed data already exists, skipping...")
+                            logger.debug(f"⏭️  Seed data already exists in '{table_name}', skipping...")
+                        elif any(phrase in error_str for phrase in [
+                            'foreign key',
+                            'constraint',
+                            'references',
+                            'does not exist'
+                        ]):
+                            insert_errors += 1
+                            logger.error(f"❌ Foreign key constraint error for '{table_name}': {str(e)}")
+                            logger.error(f"   This usually means a referenced record doesn't exist")
+                            errors.append(f"Foreign key error in {table_name}: {str(e)}")
                         else:
                             insert_errors += 1
-                            logger.warning(f"⚠️  Error inserting seed data: {str(e)}")
+                            logger.warning(f"⚠️  Error inserting seed data into '{table_name}': {str(e)}")
 
             if insert_count > 0:
                 logger.info(f"✅ Inserted {insert_count} seed data records")
@@ -608,6 +618,24 @@ class DatabaseInitializer:
 
             logger.warning("⚠️  No categories found - this should have been handled by SQL file")
             logger.info("📦 Attempting fallback category seeding...")
+
+            # Ensure system user exists first (required for foreign key constraint)
+            try:
+                system_user_check = await query_db("SELECT * FROM users WHERE id = 'system' LIMIT 1")
+                if not system_user_check or len(system_user_check) == 0:
+                    logger.info("📝 Creating system user for category foreign key constraint...")
+                    system_user_sql = """
+                    INSERT INTO users (id, email, password_hash, name, created_at, preferences)
+                    VALUES ('system', 'system@internal', 'SYSTEM_ACCOUNT_NO_LOGIN', 'System Account', '2026-01-16T00:00:00Z', '{"is_system": true}')
+                    """
+                    await execute_db(system_user_sql)
+                    logger.info("✅ System user created")
+                else:
+                    logger.info("✅ System user already exists")
+            except Exception as e:
+                logger.error(f"❌ Error ensuring system user exists: {str(e)}")
+                logger.error("   Cannot seed categories without system user (foreign key constraint)")
+                return 0
 
             # This is now a fallback - the SQL file should handle seeding
             default_categories = [
