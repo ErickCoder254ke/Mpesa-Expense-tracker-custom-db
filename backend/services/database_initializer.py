@@ -19,7 +19,8 @@ class DatabaseInitializer:
     """Service for automatic database initialization"""
 
     # Schema version - increment when schema changes
-    SCHEMA_VERSION = "2.0.0"  # 2.0.0 = Email/Password authentication
+    SCHEMA_VERSION = "2.1.0"  # 2.1.0 = Proper foreign key relationships
+    # Previous: 2.0.0 = Email/Password authentication
     # Previous: 1.0.0 = PIN-based authentication (deprecated)
 
     @staticmethod
@@ -432,9 +433,10 @@ class DatabaseInitializer:
 
         # Define table creation statements
         # Note: PesaDB doesn't support IF NOT EXISTS, DEFAULT, or NOT NULL in CREATE TABLE
-        # These are removed to match actual PesaDB capabilities
+        # Foreign key relationships are defined using REFERENCES
+        # Tables must be created in dependency order: users → categories → transactions/budgets
         table_statements = [
-            # Users table
+            # Users table (base table with no dependencies)
             (
                 "users",
                 """CREATE TABLE users (
@@ -446,12 +448,12 @@ class DatabaseInitializer:
     preferences STRING
 )"""
             ),
-            # Categories table
+            # Categories table (references users)
             (
                 "categories",
                 """CREATE TABLE categories (
     id STRING PRIMARY KEY,
-    user_id STRING,
+    user_id STRING REFERENCES users(id),
     name STRING,
     icon STRING,
     color STRING,
@@ -459,7 +461,7 @@ class DatabaseInitializer:
     is_default BOOL
 )"""
             ),
-            # Transactions table
+            # Transactions table (references users, categories, and self)
             (
                 "transactions",
                 """CREATE TABLE transactions (
@@ -476,10 +478,10 @@ class DatabaseInitializer:
     created_at STRING,
     transaction_group_id STRING,
     transaction_role STRING,
-    parent_transaction_id STRING
+    parent_transaction_id STRING REFERENCES transactions(id)
 )"""
             ),
-            # Budgets table
+            # Budgets table (references users and categories)
             (
                 "budgets",
                 """CREATE TABLE budgets (
@@ -493,7 +495,7 @@ class DatabaseInitializer:
     created_at STRING
 )"""
             ),
-            # SMS Import Logs table
+            # SMS Import Logs table (references users)
             (
                 "sms_import_logs",
                 """CREATE TABLE sms_import_logs (
@@ -509,14 +511,14 @@ class DatabaseInitializer:
     created_at STRING
 )"""
             ),
-            # Duplicate Logs table
+            # Duplicate Logs table (references users and transactions)
             (
                 "duplicate_logs",
                 """CREATE TABLE duplicate_logs (
     id STRING PRIMARY KEY,
     user_id STRING REFERENCES users(id),
-    original_transaction_id STRING,
-    duplicate_transaction_id STRING,
+    original_transaction_id STRING REFERENCES transactions(id),
+    duplicate_transaction_id STRING REFERENCES transactions(id),
     message_hash STRING,
     mpesa_transaction_id STRING,
     reason STRING,
@@ -527,7 +529,7 @@ class DatabaseInitializer:
     action_taken STRING
 )"""
             ),
-            # Status Checks table
+            # Status Checks table (no dependencies)
             (
                 "status_checks",
                 """CREATE TABLE status_checks (

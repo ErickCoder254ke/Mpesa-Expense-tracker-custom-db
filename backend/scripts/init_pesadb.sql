@@ -1,5 +1,5 @@
 -- M-Pesa Expense Tracker - Database Initialization Script
--- PesaDB SQL Schema (v2.0.0)
+-- PesaDB SQL Schema (v2.1.0)
 -- Last Updated: 2026-01-16
 --
 -- IMPORTANT: PesaDB Constraints
@@ -9,10 +9,12 @@
 -- - Use BOOL instead of BOOLEAN
 -- - Use STRING instead of VARCHAR/TEXT
 -- - Use FLOAT instead of DECIMAL
+-- - FOREIGN KEY constraints are supported using REFERENCES
 
 -- ========================================
 -- Table 1: Users
 -- ========================================
+-- Base table with no dependencies
 CREATE TABLE users (
     id STRING PRIMARY KEY,
     email STRING,
@@ -25,9 +27,10 @@ CREATE TABLE users (
 -- ========================================
 -- Table 2: Categories
 -- ========================================
+-- References: users (optional for user-created categories)
 CREATE TABLE categories (
     id STRING PRIMARY KEY,
-    user_id STRING,
+    user_id STRING REFERENCES users(id),
     name STRING,
     icon STRING,
     color STRING,
@@ -38,12 +41,13 @@ CREATE TABLE categories (
 -- ========================================
 -- Table 3: Transactions
 -- ========================================
+-- References: users, categories, transactions (self-referential)
 CREATE TABLE transactions (
     id STRING PRIMARY KEY,
-    user_id STRING,
+    user_id STRING REFERENCES users(id),
     amount FLOAT,
     type STRING,
-    category_id STRING,
+    category_id STRING REFERENCES categories(id),
     description STRING,
     date STRING,
     source STRING,
@@ -52,16 +56,17 @@ CREATE TABLE transactions (
     created_at STRING,
     transaction_group_id STRING,
     transaction_role STRING,
-    parent_transaction_id STRING
+    parent_transaction_id STRING REFERENCES transactions(id)
 );
 
 -- ========================================
 -- Table 4: Budgets
 -- ========================================
+-- References: users, categories
 CREATE TABLE budgets (
     id STRING PRIMARY KEY,
-    user_id STRING,
-    category_id STRING,
+    user_id STRING REFERENCES users(id),
+    category_id STRING REFERENCES categories(id),
     amount FLOAT,
     period STRING,
     month INT,
@@ -72,9 +77,10 @@ CREATE TABLE budgets (
 -- ========================================
 -- Table 5: SMS Import Logs
 -- ========================================
+-- References: users
 CREATE TABLE sms_import_logs (
     id STRING PRIMARY KEY,
-    user_id STRING,
+    user_id STRING REFERENCES users(id),
     import_session_id STRING,
     total_messages INT,
     successful_imports INT,
@@ -88,11 +94,12 @@ CREATE TABLE sms_import_logs (
 -- ========================================
 -- Table 6: Duplicate Logs
 -- ========================================
+-- References: users, transactions
 CREATE TABLE duplicate_logs (
     id STRING PRIMARY KEY,
-    user_id STRING,
-    original_transaction_id STRING,
-    duplicate_transaction_id STRING,
+    user_id STRING REFERENCES users(id),
+    original_transaction_id STRING REFERENCES transactions(id),
+    duplicate_transaction_id STRING REFERENCES transactions(id),
     message_hash STRING,
     mpesa_transaction_id STRING,
     reason STRING,
@@ -106,6 +113,7 @@ CREATE TABLE duplicate_logs (
 -- ========================================
 -- Table 7: Status Checks
 -- ========================================
+-- No foreign key dependencies
 CREATE TABLE status_checks (
     id STRING PRIMARY KEY,
     status STRING,
@@ -116,6 +124,8 @@ CREATE TABLE status_checks (
 -- ========================================
 -- Seed Data: Default Categories
 -- ========================================
+-- System categories with user_id = 'system'
+-- These should be inserted AFTER the users table exists
 
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
 VALUES ('cat-food', 'system', 'Food & Dining', '🍔', '#FF6B6B', '["food", "restaurant", "dining", "lunch", "dinner", "breakfast", "nyama", "choma"]', TRUE);
@@ -153,6 +163,35 @@ VALUES ('cat-income', 'system', 'Income', '💵', '#90EE90', '["salary", "income
 INSERT INTO categories (id, user_id, name, icon, color, keywords, is_default)
 VALUES ('cat-other', 'system', 'Other', '📌', '#D4A5A5', '[]', TRUE);
 
+-- ========================================
+-- Database Relationships Summary
+-- ========================================
+-- 
+-- USERS (Base table, no dependencies)
+--   ↑
+--   ├── CATEGORIES.user_id (optional - 'system' for default categories)
+--   ├── TRANSACTIONS.user_id
+--   ├── BUDGETS.user_id
+--   ├── SMS_IMPORT_LOGS.user_id
+--   └── DUPLICATE_LOGS.user_id
+--
+-- CATEGORIES
+--   ↑
+--   ├── TRANSACTIONS.category_id
+--   └── BUDGETS.category_id
+--
+-- TRANSACTIONS
+--   ↑
+--   ├── TRANSACTIONS.parent_transaction_id (self-referential for fees)
+--   ├── DUPLICATE_LOGS.original_transaction_id
+--   └── DUPLICATE_LOGS.duplicate_transaction_id
+--
+-- Referential Integrity Notes:
+-- 1. Deleting a user should cascade delete their transactions, budgets, logs
+-- 2. Deleting a category should prevent deletion if transactions exist (or reassign to 'cat-other')
+-- 3. Parent transactions should be deleted before child fee transactions
+-- 4. System categories (user_id='system') should not be deletable
+--
 -- ========================================
 -- End of Initialization Script
 -- ========================================
