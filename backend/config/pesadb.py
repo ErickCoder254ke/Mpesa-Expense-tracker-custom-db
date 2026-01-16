@@ -20,9 +20,9 @@ class PesaDBConfig:
     """Configuration class for PesaDB connection"""
 
     def __init__(self):
-        self.api_url = os.environ.get('PESADB_API_URL', 'https://pesacoredb-backend.onrender.com/api')
+        self.api_url = os.environ.get('PESADB_API_URL')
         self.api_key = os.environ.get('PESADB_API_KEY')
-        self.database = os.environ.get('PESADB_DATABASE', 'mpesa_tracker')
+        self.database = os.environ.get('PESADB_DATABASE')
         self._validated = False
 
     def validate(self):
@@ -30,10 +30,25 @@ class PesaDBConfig:
         if self._validated:
             return
 
+        # Validate API Key (required)
         if not self.api_key:
             raise ValueError(
                 "PESADB_API_KEY environment variable is required. "
                 "Please set it in your .env file or environment variables."
+            )
+
+        # Validate API URL (required - no default)
+        if not self.api_url:
+            raise ValueError(
+                "PESADB_API_URL environment variable is required. "
+                "Example: PESADB_API_URL=https://pesacoredb-backend.onrender.com/api"
+            )
+
+        # Validate Database Name (required - no default)
+        if not self.database:
+            raise ValueError(
+                "PESADB_DATABASE environment variable is required. "
+                "Example: PESADB_DATABASE=mpesa_tracker"
             )
 
         self._validated = True

@@ -1,20 +1,24 @@
 services:
   # Backend API Service
-  - type: web
-    name: mpesa-expense-tracker-api
-    env: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: PESADB_API_URL
-        value: https://pesacoredb-backend.onrender.com/api
-      - key: PESADB_API_KEY
-        sync: false  # Set this in Render dashboard as a secret
-      - key: PESADB_DATABASE
-        value: mpesa_tracker
+  # NOTE: This is configured for Railway deployment, not Render
+  # If deploying backend to Render, uncomment and set all required env vars
+  # - type: web
+  #   name: mpesa-expense-tracker-api
+  #   env: python
+  #   rootDir: backend
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+  #   envVars:
+  #     - key: PYTHON_VERSION
+  #       value: 3.11.0
+  #     - key: PESADB_API_KEY
+  #       sync: false  # REQUIRED: Set this in Render dashboard as a secret
+  #     - key: PESADB_API_URL
+  #       sync: false  # REQUIRED: Set in Render dashboard (e.g., https://pesacoredb-backend.onrender.com/api)
+  #     - key: PESADB_DATABASE
+  #       sync: false  # REQUIRED: Set in Render dashboard (e.g., mpesa_tracker)
+  #     - key: JWT_SECRET_KEY
+  #       sync: false  # REQUIRED: Set in Render dashboard (generate with: openssl rand -hex 32)
 
   # Frontend Web Service
   - type: web
@@ -23,12 +27,12 @@ services:
     rootDir: frontend
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npm run build:web
     startCommand: npm run serve:web
     envVars:
       - key: NODE_VERSION
         value: 18.17.0
       - key: EXPO_PUBLIC_BACKEND_URL
         sync: false
-        # Set this in Render dashboard to your backend URL
-        # Example: https://mpesa-expense-tracker-api.onrender.com
+        # REQUIRED: Set this in Render dashboard to your Railway backend URL
+        # Example: https://your-backend.up.railway.app
