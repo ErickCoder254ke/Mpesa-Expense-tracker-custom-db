@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export:web",
-    "serve:web": "npx serve dist -s -l 3000",
+    "serve:web": "npx serve dist -s -l ${PORT:-3000}",
     "test": "jest",
     "reset": "expo r -c",
     "clear-cache": "expo start -c"

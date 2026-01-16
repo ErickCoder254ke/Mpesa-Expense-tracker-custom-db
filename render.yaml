@@ -1,0 +1,34 @@
+services:
+  # Backend API Service
+  - type: web
+    name: mpesa-expense-tracker-api
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PESADB_API_URL
+        value: https://pesacoredb-backend.onrender.com/api
+      - key: PESADB_API_KEY
+        sync: false  # Set this in Render dashboard as a secret
+      - key: PESADB_DATABASE
+        value: mpesa_tracker
+
+  # Frontend Web Service
+  - type: web
+    name: mpesa-expense-tracker-web
+    env: node
+    rootDir: frontend
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build:web
+    startCommand: npm run serve:web
+    envVars:
+      - key: NODE_VERSION
+        value: 18.17.0
+      - key: EXPO_PUBLIC_BACKEND_URL
+        sync: false
+        # Set this in Render dashboard to your backend URL
+        # Example: https://mpesa-expense-tracker-api.onrender.com
