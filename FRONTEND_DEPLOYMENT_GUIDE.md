@@ -79,14 +79,14 @@ The build process consists of:
    - Includes Expo, React Native Web, and Metro bundler
 
 2. **Build Web Bundle** (`npm run build`)
-   - Runs `expo export --platform web`
+   - Runs `expo export --platform web --output-dir web-build`
    - Compiles React Native components to web-compatible code using Metro bundler
-   - Outputs static files to `dist/` directory
+   - Outputs static files to `web-build/` directory
    - Includes HTML, CSS, and JavaScript bundles
 
 3. **Serve Static Files** (`npm run serve:web`)
-   - Runs `npx serve dist -s -l ${PORT:-3000}`
-   - Serves the static files from `dist/`
+   - Runs `npx serve web-build -s -l ${PORT:-3000}`
+   - Serves the static files from `web-build/`
    - Uses Render's `$PORT` environment variable
    - Fallback to port 3000 for local development
 
@@ -110,7 +110,8 @@ The build process consists of:
 ### Key Files Modified for Deployment
 
 1. **`frontend/package.json`**
-   - Updated `serve:web` script to use `$PORT` environment variable
+   - Updated `build` script to output to `web-build/` directory
+   - Updated `serve:web` script to serve from `web-build/` and use `$PORT`
    - Supports both Render deployment and local development
 
 2. **`render.yaml`** (root level)
@@ -196,6 +197,11 @@ To point to a different backend:
 **Problem**: 404 errors on routes
 - **Solution**: Ensure `serve` uses `-s` flag (single-page app mode)
 - **Reason**: React Router needs all routes to serve index.html
+
+**Problem**: "Publish directory web-build does not exist"
+- **Solution**: Verify build command includes `--output-dir web-build`
+- **Solution**: Check that `expo export` completed successfully
+- **Reason**: Render expects the output directory to be `web-build/`
 
 ### Debugging
 
