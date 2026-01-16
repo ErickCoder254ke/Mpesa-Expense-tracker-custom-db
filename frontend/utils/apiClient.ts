@@ -59,9 +59,14 @@ export const apiRequest = async (
     await AsyncStorage.removeItem('userData');
     await AsyncStorage.removeItem('isLoggedIn');
 
-    // Redirect to login screen
+    // Notify AuthContext about logout (works on web)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('app:logout'));
+    }
+
+    // Redirect to login screen with correct route
     try {
-      router.replace('/login');
+      router.replace('/(auth)/login');
     } catch (navError) {
       console.error('Navigation error:', navError);
       // If navigation fails, at least the data is cleared

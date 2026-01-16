@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import SafeIcon from '@/components/SafeIcon';
 import EnhancedSmartCategorizationModal from '../../components/EnhancedSmartCategorizationModal';
@@ -96,6 +97,15 @@ export default function BudgetScreen() {
     loadData();
     checkForUncategorizedTransactions();
   }, [checkForUncategorizedTransactions]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Budget screen focused - refreshing data');
+      loadData(true);
+      checkForUncategorizedTransactions();
+    }, [checkForUncategorizedTransactions])
+  );
 
   const loadData = async (isRefresh = false) => {
     try {

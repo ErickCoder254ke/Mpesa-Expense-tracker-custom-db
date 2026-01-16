@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import SafeIcon from '@/components/SafeIcon';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,6 +32,14 @@ export default function Dashboard() {
     logBackendConfig();
     loadDashboardData();
   }, []);
+
+  // Reload data when screen comes into focus (e.g., after adding transaction)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Dashboard screen focused - refreshing data');
+      loadDashboardData(true);
+    }, [])
+  );
 
   const loadDashboardData = async (isRefresh = false) => {
     try {
@@ -99,8 +107,15 @@ export default function Dashboard() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            await logout();
-            router.replace('/(auth)/verify-pin');
+            try {
+              console.log('🚪 User requested logout from dashboard');
+              await logout();
+              console.log('✅ Logout successful, navigating to login...');
+              router.replace('/(auth)/login');
+            } catch (error) {
+              console.error('❌ Logout failed:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           }
         }
       ]

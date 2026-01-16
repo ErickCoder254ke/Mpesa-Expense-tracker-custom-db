@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import PieChart from '@/components/charts/PieChart';
 import BarChart from '@/components/charts/BarChart';
@@ -94,6 +95,14 @@ export default function Analytics() {
   useEffect(() => {
     loadAnalyticsData();
   }, [selectedPeriod]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Analytics screen focused - refreshing data');
+      loadAnalyticsData(true);
+    }, [selectedPeriod])
+  );
 
   const loadAnalyticsData = async (isRefresh = false) => {
     try {

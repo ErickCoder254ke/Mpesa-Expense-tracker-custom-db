@@ -31,6 +31,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkAuthStatus();
+
+    // Listen for logout events from apiClient (web only)
+    const handleLogoutEvent = () => {
+      console.log('🔔 Received logout event from apiClient');
+      setUser(null);
+      setToken(null);
+      setIsAuthenticated(false);
+      setHasUser(true);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('app:logout', handleLogoutEvent);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app:logout', handleLogoutEvent);
+      }
+    };
   }, []);
 
   const checkAuthStatus = async () => {

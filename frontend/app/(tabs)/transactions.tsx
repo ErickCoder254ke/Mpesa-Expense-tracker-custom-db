@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import SafeIcon from '@/components/SafeIcon';
 import { BACKEND_URL } from '@/config/api';
@@ -67,6 +67,14 @@ export default function Transactions() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Reload data when screen comes into focus (e.g., after adding/editing transaction)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Transactions screen focused - refreshing data');
+      loadData(true);
+    }, [])
+  );
 
   const loadData = async (isRefresh = false) => {
     try {
