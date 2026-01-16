@@ -22,6 +22,7 @@ import { SMSPermissionModal } from '../components/SMSPermissionModal';
 import { useSMSPermissions } from '../hooks/useSMSPermissions';
 import { BACKEND_URL } from '@/config/api';
 import { getAuthHeaders } from '@/utils/apiClient';
+import { safeGoBack } from '@/utils/navigationHelpers';
 
 interface ParsedMessage {
   original_message: string;
@@ -447,7 +448,7 @@ export default function SMSImportScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => safeGoBack(router, '/(tabs)/transactions')}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>SMS Import</Text>

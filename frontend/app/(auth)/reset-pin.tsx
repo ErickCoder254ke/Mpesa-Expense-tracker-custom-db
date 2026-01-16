@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { BACKEND_URL } from '@/config/api';
+import { safeGoBack } from '@/utils/navigationHelpers';
 
 type Step = 'verify' | 'newPin' | 'confirmPin';
 
@@ -45,7 +46,7 @@ export default function ResetPin() {
         Alert.alert(
           'Error',
           'Could not fetch security question. Please contact support.',
-          [{ text: 'Go Back', onPress: () => router.back() }]
+          [{ text: 'Go Back', onPress: () => safeGoBack(router, '/(auth)/login') }]
         );
       }
     } catch (error) {
@@ -53,7 +54,7 @@ export default function ResetPin() {
       Alert.alert(
         'Connection Error',
         'Cannot connect to server. Please try again later.',
-        [{ text: 'Go Back', onPress: () => router.back() }]
+        [{ text: 'Go Back', onPress: () => safeGoBack(router, '/(auth)/login') }]
       );
     }
   };
@@ -190,9 +191,9 @@ export default function ResetPin() {
   const renderVerifyStep = () => (
     <View style={styles.content}>
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => safeGoBack(router, '/(auth)/login')}
         >
           <Ionicons name="arrow-back" size={24} color="#74C69D" />
         </TouchableOpacity>

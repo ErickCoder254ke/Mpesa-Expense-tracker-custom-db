@@ -58,6 +58,9 @@ export default function Settings() {
     requireReview: false,
   });
 
+  // Force re-render key for preferences section
+  const [preferencesKey, setPreferencesKey] = useState(0);
+
   useEffect(() => {
     loadCategories();
     loadSMSPreferences();
@@ -84,17 +87,21 @@ export default function Settings() {
   const loadSMSPreferences = async () => {
     try {
       const prefs = await smsParserService.getSMSPreferences();
-      setSmsPreferences({
+      const newPrefs = {
         autoCategorize: prefs.auto_categorize ?? true,
         requireReview: prefs.require_review ?? false,
-      });
+      };
+      console.log('📱 Loaded SMS preferences:', newPrefs);
+      setSmsPreferences(newPrefs);
+      setPreferencesKey(prev => prev + 1); // Force re-render
     } catch (error) {
       console.error('Error loading SMS preferences:', error);
       // Set default preferences on error
-      setSmsPreferences({
+      const defaultPrefs = {
         autoCategorize: true,
         requireReview: false,
-      });
+      };
+      setSmsPreferences(defaultPrefs);
     }
   };
 
@@ -128,15 +135,29 @@ export default function Settings() {
 
   const saveSMSPreferences = async (prefs: typeof smsPreferences) => {
     try {
+      console.log('💾 Saving SMS preferences:', prefs);
+
+      // Optimistically update UI immediately
+      setSmsPreferences(prefs);
+
+      // Save to storage
       await smsParserService.saveSMSPreferences({
         auto_categorize: prefs.autoCategorize,
         require_review: prefs.requireReview,
         enabled: true, // Add enabled flag
       });
-      setSmsPreferences(prefs);
+
+      console.log('✅ SMS preferences saved successfully');
+
+      // Verify the save by reloading (but don't show loading state)
+      const verifyPrefs = await smsParserService.getSMSPreferences();
+      console.log('🔍 Verified preferences:', verifyPrefs);
+      setPreferencesKey(prev => prev + 1); // Force re-render
     } catch (error) {
-      console.error('Error saving SMS preferences:', error);
+      console.error('❌ Error saving SMS preferences:', error);
       Alert.alert('Error', 'Failed to save preferences');
+      // Reload preferences on error to revert optimistic update
+      await loadSMSPreferences();
     }
   };
 
@@ -301,7 +322,7 @@ export default function Settings() {
         </View>
 
         {/* SMS Preferences Section */}
-        <View style={styles.section}>
+        <View key={`preferences-${preferencesKey}`} style={styles.section}>
           <Text style={styles.sectionTitle}>SMS Import Preferences</Text>
           <Text style={styles.sectionDescription}>
             Customize how SMS messages are imported

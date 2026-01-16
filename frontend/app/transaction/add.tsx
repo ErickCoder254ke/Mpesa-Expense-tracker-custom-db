@@ -18,6 +18,7 @@ import SafeIcon from '@/components/SafeIcon';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BACKEND_URL } from '@/config/api';
 import { getAuthHeaders } from '@/utils/apiClient';
+import { safeGoBack } from '@/utils/navigationHelpers';
 
 interface Category {
   id: string;
@@ -138,7 +139,7 @@ export default function AddTransaction() {
         Alert.alert(
           'Success',
           `${transactionType === 'income' ? 'Income' : 'Expense'} added successfully!`,
-          [{ text: 'OK', onPress: () => router.back() }]
+          [{ text: 'OK', onPress: () => safeGoBack(router, '/(tabs)/transactions') }]
         );
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -183,7 +184,7 @@ export default function AddTransaction() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => safeGoBack(router, '/(tabs)/transactions')}>
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>

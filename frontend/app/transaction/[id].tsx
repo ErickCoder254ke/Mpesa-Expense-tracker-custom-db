@@ -19,6 +19,7 @@ import SafeIcon from '@/components/SafeIcon';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BACKEND_URL } from '@/config/api';
 import { getAuthHeaders } from '@/utils/apiClient';
+import { safeGoBack } from '@/utils/navigationHelpers';
 
 interface Transaction {
   id: string;
@@ -88,7 +89,7 @@ export default function TransactionDetails() {
         setFormDate(new Date(transactionData.date));
       } else if (response.status === 404) {
         Alert.alert('Error', 'Transaction not found', [
-          { text: 'OK', onPress: () => router.back() }
+          { text: 'OK', onPress: () => safeGoBack(router, '/(tabs)/transactions') }
         ]);
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -240,7 +241,7 @@ export default function TransactionDetails() {
 
       if (response.ok) {
         Alert.alert('Success', 'Transaction deleted successfully!', [
-          { text: 'OK', onPress: () => router.back() }
+          { text: 'OK', onPress: () => safeGoBack(router, '/(tabs)/transactions') }
         ]);
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -284,7 +285,7 @@ export default function TransactionDetails() {
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={64} color="#E74C3C" />
           <Text style={styles.errorTitle}>Transaction Not Found</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => safeGoBack(router, '/(tabs)/transactions')}>
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -300,7 +301,7 @@ export default function TransactionDetails() {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.headerButton} onPress={() => safeGoBack(router, '/(tabs)/transactions')}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Transaction Details</Text>
