@@ -23,7 +23,7 @@ services:
     rootDir: frontend
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build:web
+    buildCommand: npm install && npm run build
     startCommand: npm run serve:web
     envVars:
       - key: NODE_VERSION
