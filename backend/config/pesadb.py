@@ -125,15 +125,27 @@ class PesaDBClient:
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
+                # Get HTTP status code
+                http_status = response.status
+
                 result = await response.json()
 
                 logger.debug(f"🔍 PesaDB Response: {result}")
 
                 if not result.get('success'):
                     error_msg = result.get('error', 'Database query failed')
-                    logger.error(f"❌ PesaDB Error - SQL: {sql}")
+
+                    # Enhanced error logging with more context
+                    logger.error(f"❌ PesaDB Error - HTTP Status: {http_status}")
+                    logger.error(f"❌ PesaDB Error - SQL: {sql[:200]}...")
                     logger.error(f"❌ PesaDB Error - Message: {error_msg}")
                     logger.error(f"❌ PesaDB Error - Full Response: {result}")
+
+                    # Log additional error details if present
+                    if 'details' in result:
+                        logger.error(f"❌ PesaDB Error - Details: {result['details']}")
+                    if 'code' in result:
+                        logger.error(f"❌ PesaDB Error - Code: {result['code']}")
 
                     # Check for common issues and provide helpful hints
                     error_lower = error_msg.lower()
@@ -149,6 +161,14 @@ class PesaDBClient:
                         logger.error("💡 HINT: Your PesaDB version doesn't support COUNT aggregates.")
                         logger.error("   The app should automatically use fallback methods.")
                         logger.error("   If you see this error repeatedly, there may be a code issue.")
+                    elif 'foreign key' in error_lower or 'constraint' in error_lower:
+                        logger.error("💡 HINT: Foreign key constraint violation.")
+                        logger.error("   Ensure referenced records exist in parent tables.")
+                        logger.error("   Table creation order: users → categories → transactions → budgets")
+                    elif 'syntax' in error_lower:
+                        logger.error("💡 HINT: SQL syntax error.")
+                        logger.error("   PesaDB has specific SQL dialect requirements.")
+                        logger.error("   Check the SQL statement for compatibility issues.")
 
                     raise Exception(f"PesaDB Error: {error_msg}")
 

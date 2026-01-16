@@ -321,17 +321,25 @@ class DatabaseInitializer:
 
                     await execute_db(statement)
 
-                    # Verify the table was created
+                    # Verify the table was created - CRITICAL CHECK
                     exists = await DatabaseInitializer.table_exists(table_name)
 
                     if exists:
                         logger.info(f"✅ Table '{table_name}' created successfully")
                         tables_created += 1
                     else:
-                        error_msg = f"Table '{table_name}' creation reported success but verification failed"
-                        logger.warning(f"⚠️  {error_msg}")
-                        # Assume success if execute_db didn't raise
-                        tables_created += 1
+                        # FIXED: Do NOT assume success when verification fails
+                        error_msg = f"Table '{table_name}' creation reported success but verification failed - table does not exist"
+                        logger.error(f"❌ {error_msg}")
+                        logger.error(f"   This indicates a silent failure during table creation")
+                        logger.error(f"   SQL: {statement[:200]}...")
+                        errors.append(error_msg)
+
+                        # Check if this is a critical table that blocks others
+                        critical_tables = ['users', 'categories']
+                        if table_name in critical_tables:
+                            logger.error(f"   ⚠️  CRITICAL: '{table_name}' is required for other tables")
+                            logger.error(f"   Further table creation may fail due to foreign key constraints")
 
                 except Exception as e:
                     error_str = str(e).lower()
@@ -347,7 +355,18 @@ class DatabaseInitializer:
                     else:
                         error_msg = f"Error creating table '{table_name}': {str(e)}"
                         logger.error(f"❌ {error_msg}")
-                        logger.debug(f"Failed SQL: {statement[:200]}")
+                        logger.error(f"Failed SQL: {statement[:200]}")
+
+                        # Check if this is a foreign key constraint error
+                        if any(phrase in error_str for phrase in [
+                            'foreign key',
+                            'constraint',
+                            'references',
+                            'violates'
+                        ]):
+                            logger.error(f"   💡 HINT: This looks like a foreign key constraint issue")
+                            logger.error(f"   Ensure parent tables (users, categories) were created first")
+
                         errors.append(error_msg)
                     # Continue with other tables
 
@@ -567,17 +586,25 @@ class DatabaseInitializer:
 
                 await execute_db(create_statement)
 
-                # Verify the table was created
+                # Verify the table was created - CRITICAL CHECK
                 exists = await DatabaseInitializer.table_exists(table_name)
 
                 if exists:
                     logger.info(f"✅ Table '{table_name}' created successfully")
                     tables_created += 1
                 else:
-                    error_msg = f"Table '{table_name}' creation reported success but verification failed"
-                    logger.warning(f"⚠️  {error_msg}")
-                    # Assume success if execute_db didn't raise
-                    tables_created += 1
+                    # FIXED: Do NOT assume success when verification fails
+                    error_msg = f"Table '{table_name}' creation reported success but verification failed - table does not exist"
+                    logger.error(f"❌ {error_msg}")
+                    logger.error(f"   This indicates a silent failure during table creation")
+                    logger.error(f"   SQL: {create_statement[:200].replace(chr(10), ' ')}...")
+                    errors.append(error_msg)
+
+                    # Check if this is a critical table that blocks others
+                    critical_tables = ['users', 'categories']
+                    if table_name in critical_tables:
+                        logger.error(f"   ⚠️  CRITICAL: '{table_name}' is required for other tables")
+                        logger.error(f"   Further table creation may fail due to foreign key constraints")
 
             except Exception as e:
                 error_str = str(e).lower()
@@ -593,7 +620,18 @@ class DatabaseInitializer:
                 else:
                     error_msg = f"Error creating table '{table_name}': {str(e)}"
                     logger.error(f"❌ {error_msg}")
-                    logger.debug(f"Failed SQL: {create_statement[:200].replace(chr(10), ' ')}")
+                    logger.error(f"Failed SQL: {create_statement[:200].replace(chr(10), ' ')}")
+
+                    # Check if this is a foreign key constraint error
+                    if any(phrase in error_str for phrase in [
+                        'foreign key',
+                        'constraint',
+                        'references',
+                        'violates'
+                    ]):
+                        logger.error(f"   💡 HINT: This looks like a foreign key constraint issue")
+                        logger.error(f"   Ensure parent tables (users, categories) were created first")
+
                     errors.append(error_msg)
                 # Continue with other tables
 
@@ -897,6 +935,28 @@ class DatabaseInitializer:
                 result['user_created'] = user_result['created']
                 if user_result.get('user_id'):
                     result['user_id'] = user_result['user_id']
+
+            # Print detailed summary
+            logger.info("=" * 80)
+            logger.info("DATABASE INITIALIZATION SUMMARY")
+            logger.info("=" * 80)
+            logger.info(f"Tables Created: {result['tables_created']}")
+            logger.info(f"Tables Skipped (already exist): {result['tables_skipped']}")
+            logger.info(f"Categories Seeded: {result['categories_seeded']}")
+            logger.info(f"Default User Created: {result.get('user_created', False)}")
+            logger.info(f"Database Verified: {result['verified']}")
+
+            if result['errors']:
+                logger.error(f"Errors Encountered: {len(result['errors'])}")
+                logger.error("Error Details:")
+                for idx, error in enumerate(result['errors'][:10], 1):  # Show first 10 errors
+                    logger.error(f"  {idx}. {error}")
+                if len(result['errors']) > 10:
+                    logger.error(f"  ... and {len(result['errors']) - 10} more errors")
+            else:
+                logger.info("Errors: None")
+
+            logger.info("=" * 80)
 
             result['success'] = True
             result['message'] = 'Database initialized successfully'
