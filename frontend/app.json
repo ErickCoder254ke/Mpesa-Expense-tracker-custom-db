@@ -25,6 +25,7 @@
     },
     "extra": {
       "EXPO_PUBLIC_BACKEND_URL": "https://mpesa-expense-tracker-custom-db.onrender.com",
+      "_comment": "Note: Environment variable EXPO_PUBLIC_BACKEND_URL takes precedence over this value",
       "router": {
         "origin": false
       },
